@@ -7,3 +7,4 @@ storage.rules
 
 # Secrets - DO NOT commit
 js/firebase-config.js
+setup-admin.html

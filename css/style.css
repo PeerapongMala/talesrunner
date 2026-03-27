@@ -494,6 +494,19 @@ body {
   color: #777;
 }
 
+.image-upload-area {
+  border: 2px dashed rgba(155, 77, 202, 0.5);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.image-upload-area:hover {
+  border-color: #ff69b4;
+}
+
 .field-error {
   color: #ff4444;
   font-size: 13px;
