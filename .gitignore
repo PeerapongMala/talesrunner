@@ -1,0 +1,6 @@
+.firebase/
+.claude/
+node_modules/
+bug/
+fix-images.html
+storage.rules

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PEERAPONG SHOP</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header">
+    <h1>PEERAPONG SHOP</h1>
+    <div class="total-items" id="totalItems">TOTAL 0 ITEMS</div>
+  </header>
+
+  <!-- NAV TABS -->
+  <div class="main-container">
+    <div class="shop-grid-container">
+      <div class="nav-tabs">
+        <button class="nav-tab active" data-tab="shop">ร้านค้า</button>
+        <button class="nav-tab" data-tab="history">ประวัติการสั่ง</button>
+      </div>
+
+      <!-- SHOP SECTION -->
+      <div id="shopSection">
+        <div class="item-grid" id="itemGrid"></div>
+      </div>
+
+      <!-- HISTORY SECTION -->
+      <div class="history-section" id="historySection">
+        <div class="history-search">
+          <input type="text" id="historyFbInput" placeholder="กรอก Facebook เพื่อค้นหาประวัติ...">
+          <button class="btn-secondary" id="historySearchBtn">ค้นหา</button>
+        </div>
+        <div id="historyList"></div>
+      </div>
+    </div>
+
+    <!-- SIDE PANEL (ตะกร้า) -->
+    <div class="side-panel" id="sidePanel">
+      <h3>รายการที่เลือก</h3>
+      <div id="cartList">
+        <div class="cart-empty">ยังไม่ได้เลือกสินค้า</div>
+      </div>
+      <div class="cart-total" id="cartTotal" style="display:none;">
+        รวม: <span id="cartTotalPrice">0</span> บาท
+      </div>
+      <button class="btn-primary" id="summaryBtn" disabled>สรุปสินค้า</button>
+    </div>
+  </div>
+
+  <!-- MODAL: เลือกจำนวน -->
+  <div class="modal-overlay" id="itemModal">
+    <div class="modal">
+      <img class="modal-item-img" id="modalItemImg" src="" alt="">
+      <div class="modal-item-name" id="modalItemName"></div>
+      <div class="modal-item-price-unit" id="modalItemPriceUnit"></div>
+      <div class="modal-stock-info" id="modalStockInfo"></div>
+      <div class="qty-selector">
+        <button class="qty-btn" id="qtyMinus">-</button>
+        <div class="qty-display" id="qtyDisplay">1</div>
+        <button class="qty-btn" id="qtyPlus">+</button>
+      </div>
+      <div class="modal-total-price" id="modalTotalPrice">0 บาท</div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" id="modalCancel">ยกเลิก</button>
+        <button class="btn-primary" id="modalConfirm">ตกลง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: สรุปสินค้า -->
+  <div class="modal-overlay" id="summaryModal">
+    <div class="modal">
+      <h2>สรุปรายการสั่งซื้อ</h2>
+      <div class="summary-list" id="summaryList"></div>
+      <div class="summary-total">
+        <span>รวมทั้งหมด</span>
+        <span id="summaryTotalPrice">0 บาท</span>
+      </div>
+      <div class="form-group">
+        <label>Facebook</label>
+        <input type="text" id="inputFb" placeholder="เช่น P'Peerapong">
+        <p class="field-error" id="inputFbError"></p>
+      </div>
+      <div class="form-group">
+        <label>ชื่อตัวละคร</label>
+        <input type="text" id="inputCharName" placeholder="ชื่อตัวละครในเกม">
+        <p class="field-error" id="inputCharNameError"></p>
+      </div>
+      <div class="warning-text">
+        หากกรอกข้อมูลผิดกรุณาแจ้ง fb: P'Peerapong<br>
+        หากกรอกผิดและไม่แจ้ง จะถือว่าไม่รับผิดชอบ
+      </div>
+      <div class="modal-buttons">
+        <button class="btn-secondary" id="summaryCancel">ยกเลิก</button>
+        <button class="btn-primary" id="summaryConfirm">ยืนยันสั่งซื้อ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: สั่งสำเร็จ -->
+  <div class="modal-overlay" id="successModal">
+    <div class="modal">
+      <div class="success-message">
+        <h2>สั่งซื้อสำเร็จ!</h2>
+        <p>รอแอดมินทักไปหาทาง Facebook นะครับ</p>
+        <button class="btn-primary" id="successClose" style="margin-top:20px;">ปิด</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/shop.js"></script>
+</body>
+</html>
