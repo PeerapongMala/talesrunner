@@ -307,6 +307,69 @@ body {
   color: #fff;
 }
 
+/* ============ TOAST NOTIFICATION ============ */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: linear-gradient(135deg, #ff4444, #ff6b6b);
+  border: 2px solid #fff;
+  color: #fff;
+  padding: 14px 24px;
+  border-radius: 10px;
+  font-family: 'Kanit', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(255, 68, 68, 0.5);
+  z-index: 10000;
+  opacity: 0;
+  transform: translateX(100%);
+  transition: all 0.3s ease;
+}
+
+.toast-notification.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ============ ICON BUTTON (circle) ============ */
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #9b4dca;
+  background: rgba(155, 77, 202, 0.2);
+  color: #e0b0ff;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  margin: 0 1px;
+  vertical-align: middle;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-icon:hover {
+  background: rgba(155, 77, 202, 0.5);
+  border-color: #ff69b4;
+  color: #fff;
+}
+
+.btn-icon-danger {
+  border-color: #ff4444;
+  color: #ff4444;
+  background: rgba(255, 68, 68, 0.15);
+}
+
+.btn-icon-danger:hover {
+  background: rgba(255, 68, 68, 0.4);
+  border-color: #ff4444;
+  color: #fff;
+}
+
 /* ============ MODAL ============ */
 .modal-overlay {
   display: none;
@@ -687,13 +750,23 @@ body {
 .product-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .product-table th,
 .product-table td {
-  padding: 12px;
+  padding: 10px 6px;
   text-align: left;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  vertical-align: middle;
+}
+
+.product-table tbody tr:nth-child(even) {
+  background: rgba(155, 77, 202, 0.1);
+}
+
+.product-table tbody tr:hover {
+  background: rgba(155, 77, 202, 0.2);
 }
 
 .product-table th {
@@ -711,9 +784,36 @@ body {
   height: 50px;
   object-fit: contain;
   border-radius: 6px;
+  display: block;
+  margin: 0 auto;
 }
 
 /* Admin - Order Board */
+.order-counter {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pending-counter {
+  background: rgba(255, 165, 0, 0.2);
+  border: 1px solid #ffa500;
+  color: #ffa500;
+}
+
+.completed-counter {
+  background: rgba(76, 175, 80, 0.2);
+  border: 1px solid #4caf50;
+  color: #4caf50;
+}
+
+.cancelled-counter {
+  background: rgba(255, 68, 68, 0.2);
+  border: 1px solid #ff4444;
+  color: #ff4444;
+}
+
 .order-board {
   display: grid;
   gap: 12px;
@@ -724,6 +824,39 @@ body {
   border: 1px solid rgba(155, 77, 202, 0.4);
   border-radius: 12px;
   padding: 18px;
+  position: relative;
+}
+
+.admin-order-card.order-new {
+  border: 2px solid #ff4444;
+  background: rgba(255, 68, 68, 0.15);
+  box-shadow: 0 0 20px rgba(255, 68, 68, 0.3);
+  animation: newOrderPulse 1.5s ease 5;
+}
+
+@keyframes newOrderPulse {
+  0%, 100% { box-shadow: 0 0 5px rgba(255, 68, 68, 0.3); }
+  50% { box-shadow: 0 0 25px rgba(255, 68, 68, 0.7); }
+}
+
+.new-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: #ff4444;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(255, 68, 68, 0.6);
+  animation: badgeBounce 0.5s ease;
+}
+
+@keyframes badgeBounce {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.3); }
+  100% { transform: scale(1); }
 }
 
 .admin-order-header {
@@ -744,6 +877,8 @@ body {
   display: flex;
   gap: 8px;
   margin-top: 12px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .admin-order-actions select {

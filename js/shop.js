@@ -56,7 +56,7 @@ function openItemModal(itemId) {
   const available = currentItem.stock - inCart;
 
   if (available <= 0) {
-    alert('สินค้านี้เลือกครบจำนวน stock แล้ว');
+    showAlert('สินค้านี้เลือกครบจำนวน stock แล้ว');
     return;
   }
 
@@ -247,7 +247,7 @@ async function submitOrder() {
     document.getElementById('successModal').classList.add('active');
 
   } catch (e) {
-    alert('เกิดข้อผิดพลาด: ' + e.message);
+    showAlert('เกิดข้อผิดพลาด: ' + e.message, 'ผิดพลาด');
   } finally {
     confirmBtn.disabled = false;
     confirmBtn.textContent = 'ยืนยันสั่งซื้อ';
@@ -258,7 +258,7 @@ async function submitOrder() {
 async function searchHistory() {
   const fb = document.getElementById('historyFbInput').value.trim();
   if (!fb) {
-    alert('กรุณากรอก Facebook');
+    showAlert('กรุณากรอก Facebook');
     return;
   }
 
