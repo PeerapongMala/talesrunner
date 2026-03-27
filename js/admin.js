@@ -123,7 +123,8 @@ function loadOrders() {
       board.innerHTML = snapshot.docs.map((doc, index) => {
         const order = doc.data();
         const date = order.createdAt ? order.createdAt.toDate().toLocaleString('th-TH') : '-';
-        const itemsText = order.items.map(i => `${i.name} x${i.qty}`).join('<br>');
+        const items = Array.isArray(order.items) ? order.items : [];
+        const itemsText = items.map(i => `${escapeHtml(i.name)} x${i.qty}`).join('<br>');
         const status = order.status || 'pending';
         const isNew = newIds.has(doc.id);
         const orderNum = total - index;
@@ -133,11 +134,11 @@ function loadOrders() {
             ${isNew ? '<span class="new-badge">ใหม่</span>' : ''}
             <div class="admin-order-header">
               <span style="font-weight:600;color:#e0b0ff;">#${orderNum}</span>
-              <span style="font-weight:600;">FB: ${order.facebook}</span>
+              <span style="font-weight:600;">FB: ${escapeHtml(order.facebook)}</span>
               <span style="font-size:13px;color:#aaa;">${date}</span>
             </div>
             <div class="admin-order-info">
-              <div>ตัวละคร: <strong>${order.characterName}</strong></div>
+              <div>ตัวละคร: <strong>${escapeHtml(order.characterName)}</strong></div>
               <div style="margin-top:8px;">${itemsText}</div>
               <div style="color:#ff69b4;font-weight:600;margin-top:8px;">รวม ${order.totalPrice} บาท</div>
             </div>
@@ -197,15 +198,15 @@ async function loadProducts() {
       return `
         <tr>
           <td style="text-align:center;color:#e0b0ff;font-weight:600;">${index + 1}</td>
-          <td><img src="${item.image}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22><rect fill=%22%23333%22 width=%2250%22 height=%2250%22/></svg>'"></td>
-          <td>${item.name}</td>
+          <td><img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22><rect fill=%22%23333%22 width=%2250%22 height=%2250%22/></svg>'"></td>
+          <td>${escapeHtml(item.name)}</td>
           <td>${item.price} บาท</td>
           <td style="font-weight:600;text-align:center;">${item.stock}</td>
-          <td style="text-align:center;"><button class="btn-icon" onclick="openAddStockModal('${doc.id}', '${item.name.replace(/'/g, "\\'")}')">+</button></td>
-          <td style="text-align:center;"><button class="btn-icon" onclick="openStockHistory('${doc.id}', '${item.name.replace(/'/g, "\\'")}')">&#128065;</button></td>
+          <td style="text-align:center;"><button class="btn-icon" data-action="addStock" data-id="${doc.id}" data-name="${escapeHtml(item.name)}">+</button></td>
+          <td style="text-align:center;"><button class="btn-icon" data-action="stockHistory" data-id="${doc.id}" data-name="${escapeHtml(item.name)}">&#128065;</button></td>
           <td style="text-align:center;white-space:nowrap;">
-            <button class="btn-icon" onclick="openEditProductModal('${doc.id}', ${JSON.stringify(item.name)}, ${item.price}, ${JSON.stringify(item.image || '')})" title="แก้ไข"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
-            <button class="btn-icon btn-icon-danger" onclick="deleteProduct('${doc.id}')" title="ลบ"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
+            <button class="btn-icon" data-action="edit" data-id="${doc.id}" data-name="${escapeHtml(item.name)}" data-price="${item.price}" data-image="${escapeHtml(item.image || '')}" title="แก้ไข"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+            <button class="btn-icon btn-icon-danger" data-action="delete" data-id="${doc.id}" title="ลบ"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
           </td>
         </tr>
       `;
@@ -262,18 +263,17 @@ async function confirmAddStock() {
   btn.textContent = 'กำลังเพิ่ม...';
 
   try {
-    // เพิ่ม stock
-    await db.collection('items').doc(currentStockItemId).update({
+    // เพิ่ม stock + บันทึกประวัติ (atomic)
+    const batch = db.batch();
+    batch.update(db.collection('items').doc(currentStockItemId), {
       stock: firebase.firestore.FieldValue.increment(qty)
     });
-
-    // บันทึกประวัติ
-    await db.collection('items').doc(currentStockItemId)
-      .collection('stockHistory').add({
-        qty,
-        addedBy,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+    batch.set(db.collection('items').doc(currentStockItemId).collection('stockHistory').doc(), {
+      qty,
+      addedBy,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await batch.commit();
 
     closeAddStockModal();
     loadProducts();
@@ -309,7 +309,7 @@ async function openStockHistory(itemId, itemName) {
       return `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.1);">
           <div>
-            <div style="font-weight:600;">${h.addedBy}</div>
+            <div style="font-weight:600;">${escapeHtml(h.addedBy)}</div>
             <div style="font-size:12px;color:#aaa;">${date}</div>
           </div>
           <div style="color:#4caf50;font-weight:600;font-size:16px;">+${h.qty}</div>
@@ -551,6 +551,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('confirmEditProduct').addEventListener('click', confirmEditProduct);
   document.getElementById('cancelEditProduct').addEventListener('click', closeEditProductModal);
+
+  // Event delegation สำหรับปุ่มในตารางสินค้า
+  document.getElementById('productTableBody').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const { action, id, name, price, image } = btn.dataset;
+    if (action === 'addStock') openAddStockModal(id, name);
+    else if (action === 'stockHistory') openStockHistory(id, name);
+    else if (action === 'edit') openEditProductModal(id, name, Number(price), image);
+    else if (action === 'delete') deleteProduct(id);
+  });
 
   // ปิด modal เมื่อกดพื้นหลัง
   ['addProductModal', 'addStockModal', 'stockHistoryModal', 'editProductModal'].forEach(id => {

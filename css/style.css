@@ -536,7 +536,8 @@ body {
   color: #ddd;
 }
 
-.form-group input {
+.form-group input,
+.form-group select {
   width: 100%;
   padding: 12px 15px;
   background: rgba(255, 255, 255, 0.1);
@@ -549,7 +550,12 @@ body {
   transition: border-color 0.3s;
 }
 
-.form-group input:focus {
+.form-group select option {
+  background: #1a0533;
+}
+
+.form-group input:focus,
+.form-group select:focus {
   border-color: #ff69b4;
 }
 

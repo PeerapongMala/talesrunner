@@ -4,6 +4,10 @@
     "public": ".",
     "ignore": [
       "firebase.json",
+      "firestore.rules",
+      "firestore.indexes.json",
+      "test-order.html",
+      "clear-orders.html",
       "**/.*",
       "**/node_modules/**",
       "prompt.md"
