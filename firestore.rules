@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // items - ใครก็อ่านได้ แต่เขียนได้เฉพาะจาก admin (ตอนนี้เปิดให้เขียนได้ก่อน)
+    match /items/{itemId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // orders - สร้างได้ อ่านได้ อัพเดทได้ (สำหรับ admin เปลี่ยนสถานะ)
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+    }
+  }
+}
