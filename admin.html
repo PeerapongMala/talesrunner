@@ -118,8 +118,12 @@
         <p class="field-error" id="editPriceError"></p>
       </div>
       <div class="form-group">
-        <label>ชื่อไฟล์รูป (ในโฟลเดอร์ assets/)</label>
-        <input type="text" id="editImage">
+        <label>รูปสินค้า</label>
+        <div class="image-upload-area" id="editImageUploadArea">
+          <img id="editImagePreview" style="display:none;max-width:120px;max-height:120px;margin:0 auto 10px;border-radius:8px;">
+          <p id="editImageUploadText" style="color:#aaa;font-size:14px;">คลิกเพื่อเปลี่ยนรูป</p>
+          <input type="file" id="editImage" accept="image/*" style="display:none;">
+        </div>
         <p class="field-error" id="editImageError"></p>
       </div>
       <div class="modal-buttons">
@@ -149,8 +153,12 @@
         <p class="field-error" id="pStockError"></p>
       </div>
       <div class="form-group">
-        <label>ชื่อไฟล์รูป (ในโฟลเดอร์ assets/)</label>
-        <input type="text" id="pImage" placeholder="เช่น item1.png">
+        <label>รูปสินค้า</label>
+        <div class="image-upload-area" id="addImageUploadArea">
+          <img id="addImagePreview" style="display:none;max-width:120px;max-height:120px;margin:0 auto 10px;border-radius:8px;">
+          <p id="addImageUploadText" style="color:#aaa;font-size:14px;">คลิกเพื่อเลือกรูป</p>
+          <input type="file" id="pImage" accept="image/*" style="display:none;">
+        </div>
         <p class="field-error" id="pImageError"></p>
       </div>
       <div class="modal-buttons">

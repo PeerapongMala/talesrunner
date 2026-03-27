@@ -2,27 +2,49 @@
 // PEERAPONG SHOP - Admin Logic
 // ============================================
 
-const ADMIN_PASSWORD = 'peerapong';
 let currentStockItemId = null;
 let currentStockItemName = '';
+let addImageBase64 = null;
+let editImageBase64 = null;
 
-// ============ PASSWORD CHECK ============
+// ============ PASSWORD CHECK (from Firestore) ============
 function setupPassword() {
   const modal = document.getElementById('passwordModal');
   const input = document.getElementById('passwordInput');
   const btn = document.getElementById('passwordSubmit');
   const error = document.getElementById('passwordError');
 
-  function tryLogin() {
-    if (input.value === ADMIN_PASSWORD) {
-      modal.classList.remove('active');
-      document.getElementById('adminContent').style.display = 'block';
-      loadOrders();
-      loadProducts();
-    } else {
+  async function tryLogin() {
+    btn.disabled = true;
+    btn.textContent = 'กำลังตรวจสอบ...';
+    error.style.display = 'none';
+
+    try {
+      const doc = await db.collection('settings').doc('admin').get();
+      if (!doc.exists) {
+        error.textContent = 'ยังไม่ได้ตั้งรหัสผ่าน กรุณาตั้งค่าใน Firestore (settings/admin)';
+        error.style.display = 'block';
+        return;
+      }
+
+      const adminPassword = doc.data().password;
+      if (input.value === adminPassword) {
+        modal.classList.remove('active');
+        document.getElementById('adminContent').style.display = 'block';
+        loadOrders();
+        loadProducts();
+      } else {
+        error.textContent = 'รหัสผ่านไม่ถูกต้อง';
+        error.style.display = 'block';
+        input.value = '';
+        input.focus();
+      }
+    } catch (e) {
+      error.textContent = 'เชื่อมต่อไม่ได้: ' + e.message;
       error.style.display = 'block';
-      input.value = '';
-      input.focus();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'เข้าสู่ระบบ';
     }
   }
 
@@ -128,7 +150,7 @@ async function loadProducts() {
             <button style="background:none;border:none;color:#aaa;cursor:pointer;font-size:16px;margin-left:4px;" onclick="openStockHistory('${doc.id}', '${item.name.replace(/'/g, "\\'")}')">&#128065;</button>
           </td>
           <td>
-            <button class="btn-secondary" style="padding:4px 10px;font-size:12px;margin-right:6px;" onclick="openEditProductModal('${doc.id}', '${item.name.replace(/'/g, "\\'")}', ${item.price}, '${(item.image || '').replace('assets/', '').replace(/'/g, "\\'")}')">แก้ไข</button>
+            <button class="btn-secondary" style="padding:4px 10px;font-size:12px;margin-right:6px;" onclick="openEditProductModal('${doc.id}', ${JSON.stringify(item.name)}, ${item.price}, ${JSON.stringify(item.image || '')})">แก้ไข</button>
             <button class="btn-danger" onclick="deleteProduct('${doc.id}')">ลบ</button>
           </td>
         </tr>
@@ -251,19 +273,80 @@ function closeStockHistory() {
   document.getElementById('stockHistoryModal').classList.remove('active');
 }
 
+// ============ IMAGE UPLOAD HELPERS ============
+function fileToBase64(file, maxWidth) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // resize ถ้าใหญ่เกิน
+        const canvas = document.createElement('canvas');
+        let w = img.width;
+        let h = img.height;
+        if (w > maxWidth) {
+          h = Math.round(h * maxWidth / w);
+          w = maxWidth;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/webp', 0.8));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function setupImageUploadArea(areaId, inputId, previewId, textId, onSelect) {
+  const area = document.getElementById(areaId);
+  const input = document.getElementById(inputId);
+  const preview = document.getElementById(previewId);
+  const text = document.getElementById(textId);
+
+  area.addEventListener('click', () => input.click());
+  input.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const base64 = await fileToBase64(file, 300);
+    preview.src = base64;
+    preview.style.display = 'block';
+    text.textContent = file.name;
+    onSelect(base64);
+  });
+
+  // Drag & drop
+  area.addEventListener('dragover', (e) => { e.preventDefault(); area.style.borderColor = '#ff69b4'; });
+  area.addEventListener('dragleave', () => { area.style.borderColor = ''; });
+  area.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    area.style.borderColor = '';
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      const base64 = await fileToBase64(file, 300);
+      preview.src = base64;
+      preview.style.display = 'block';
+      text.textContent = file.name;
+      onSelect(base64);
+    }
+  });
+}
+
 // ============ ADD PRODUCT ============
 async function addProduct() {
   clearFieldErrors();
   const name = document.getElementById('pName').value.trim();
   const price = parseInt(document.getElementById('pPrice').value);
   const stock = parseInt(document.getElementById('pStock').value);
-  const imageFile = document.getElementById('pImage').value.trim();
 
   let hasError = false;
   if (!name) { showFieldError('pNameError', 'กรุณากรอกชื่อสินค้า'); hasError = true; }
   if (!price || price <= 0) { showFieldError('pPriceError', 'กรุณากรอกราคา'); hasError = true; }
   if (isNaN(stock) || stock < 0) { showFieldError('pStockError', 'กรุณากรอกจำนวน stock'); hasError = true; }
-  if (!imageFile) { showFieldError('pImageError', 'กรุณากรอกชื่อไฟล์รูป'); hasError = true; }
+  if (!addImageBase64) { showFieldError('pImageError', 'กรุณาเลือกรูปสินค้า'); hasError = true; }
   if (hasError) return;
 
   const btn = document.getElementById('addProductBtn');
@@ -275,7 +358,7 @@ async function addProduct() {
       name,
       price,
       stock,
-      image: `assets/${imageFile}`,
+      image: addImageBase64,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
@@ -292,10 +375,13 @@ async function addProduct() {
 // ============ ADD PRODUCT MODAL ============
 function openAddProductModal() {
   clearFieldErrors();
+  addImageBase64 = null;
   document.getElementById('pName').value = '';
   document.getElementById('pPrice').value = '';
   document.getElementById('pStock').value = '';
   document.getElementById('pImage').value = '';
+  document.getElementById('addImagePreview').style.display = 'none';
+  document.getElementById('addImageUploadText').textContent = 'คลิกเพื่อเลือกรูป';
   document.getElementById('addProductModal').classList.add('active');
 }
 
@@ -305,13 +391,27 @@ function closeAddProductModal() {
 
 // ============ EDIT PRODUCT MODAL ============
 let editingProductId = null;
+let editOriginalImage = null;
 
-function openEditProductModal(itemId, name, price, imageFile) {
+function openEditProductModal(itemId, name, price, currentImage) {
   editingProductId = itemId;
+  editOriginalImage = currentImage;
+  editImageBase64 = null;
   clearFieldErrors();
   document.getElementById('editName').value = name;
   document.getElementById('editPrice').value = price;
-  document.getElementById('editImage').value = imageFile;
+  document.getElementById('editImage').value = '';
+
+  const preview = document.getElementById('editImagePreview');
+  if (currentImage) {
+    preview.src = currentImage;
+    preview.style.display = 'block';
+    document.getElementById('editImageUploadText').textContent = 'คลิกเพื่อเปลี่ยนรูป';
+  } else {
+    preview.style.display = 'none';
+    document.getElementById('editImageUploadText').textContent = 'คลิกเพื่อเลือกรูป';
+  }
+
   document.getElementById('editProductModal').classList.add('active');
 }
 
@@ -324,12 +424,11 @@ async function confirmEditProduct() {
   clearFieldErrors();
   const name = document.getElementById('editName').value.trim();
   const price = parseInt(document.getElementById('editPrice').value);
-  const imageFile = document.getElementById('editImage').value.trim();
 
   let hasError = false;
   if (!name) { showFieldError('editNameError', 'กรุณากรอกชื่อสินค้า'); hasError = true; }
   if (!price || price <= 0) { showFieldError('editPriceError', 'กรุณากรอกราคา'); hasError = true; }
-  if (!imageFile) { showFieldError('editImageError', 'กรุณากรอกชื่อไฟล์รูป'); hasError = true; }
+  if (!editImageBase64 && !editOriginalImage) { showFieldError('editImageError', 'กรุณาเลือกรูปสินค้า'); hasError = true; }
   if (hasError) return;
 
   const btn = document.getElementById('confirmEditProduct');
@@ -337,11 +436,12 @@ async function confirmEditProduct() {
   btn.textContent = 'กำลังบันทึก...';
 
   try {
-    await db.collection('items').doc(editingProductId).update({
-      name,
-      price,
-      image: `assets/${imageFile}`
-    });
+    const updateData = { name, price };
+    if (editImageBase64) {
+      updateData.image = editImageBase64;
+    }
+
+    await db.collection('items').doc(editingProductId).update(updateData);
 
     closeEditProductModal();
     loadProducts();
@@ -369,6 +469,10 @@ async function deleteProduct(itemId) {
 document.addEventListener('DOMContentLoaded', () => {
   setupPassword();
   setupTabs();
+
+  // Image upload areas
+  setupImageUploadArea('addImageUploadArea', 'pImage', 'addImagePreview', 'addImageUploadText', (b64) => { addImageBase64 = b64; });
+  setupImageUploadArea('editImageUploadArea', 'editImage', 'editImagePreview', 'editImageUploadText', (b64) => { editImageBase64 = b64; });
 
   document.getElementById('addProductBtn').addEventListener('click', addProduct);
   document.getElementById('openAddProductBtn').addEventListener('click', openAddProductModal);
