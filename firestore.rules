@@ -22,15 +22,19 @@ service cloud.firestore {
       allow create: if request.resource.data.keys().hasAll(['facebook', 'characterName', 'items', 'totalPrice', 'status'])
                     && request.resource.data.facebook is string
                     && request.resource.data.facebook.size() > 0
+                    && request.resource.data.facebook.size() <= 100
                     && request.resource.data.characterName is string
                     && request.resource.data.characterName.size() > 0
+                    && request.resource.data.characterName.size() <= 100
                     && request.resource.data.items is list
                     && request.resource.data.items.size() > 0
                     && request.resource.data.totalPrice is number
                     && request.resource.data.totalPrice > 0
                     && request.resource.data.status == 'pending';
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledBy']);
-      allow delete: if true;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledBy'])
+                    && request.resource.data.status in ['pending', 'completed', 'cancelled'];
+      // delete ปิดไว้ — ลบผ่าน Firebase Console เท่านั้น
+      allow delete: if false;
     }
 
     // settings - อ่านได้อย่างเดียว (เปลี่ยนผ่าน Firebase Console เท่านั้น)

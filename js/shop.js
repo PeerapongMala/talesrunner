@@ -38,8 +38,8 @@ function renderItems() {
       <div class="item-card ${outOfStock ? 'out-of-stock' : ''}"
            data-id="${item.id}" ${outOfStock ? '' : `onclick="openItemModal('${item.id}')"`}>
         <div class="stock-badge">x${item.stock}</div>
-        <img src="${item.image}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text fill=%22%23999%22 x=%2250%22 y=%2255%22 text-anchor=%22middle%22 font-size=%2212%22>No Image</text></svg>'">
-        <div class="item-name">${item.name}</div>
+        <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text fill=%22%23999%22 x=%2250%22 y=%2255%22 text-anchor=%22middle%22 font-size=%2212%22>No Image</text></svg>'">
+        <div class="item-name">${escapeHtml(item.name)}</div>
         <div class="item-price">ชิ้นละ ${item.price} บาท</div>
       </div>
     `;
@@ -124,7 +124,7 @@ function renderCart() {
     total += subtotal;
     return `
       <div class="cart-item">
-        <span class="cart-item-name">${item.name}</span>
+        <span class="cart-item-name">${escapeHtml(item.name)}</span>
         <span class="cart-item-qty">x${qty}</span>
         <span class="cart-item-price">${subtotal}฿</span>
         <button class="cart-item-remove" onclick="removeFromCart('${id}')">&times;</button>
@@ -149,7 +149,7 @@ function openSummaryModal() {
     total += subtotal;
     return `
       <div class="summary-item">
-        <span>${item.name} x${qty}</span>
+        <span>${escapeHtml(item.name)} x${qty}</span>
         <span>${subtotal} บาท</span>
       </div>
     `;
@@ -187,7 +187,9 @@ async function submitOrder() {
 
   let hasError = false;
   if (!fb) { showFieldError('inputFbError', 'กรุณากรอก Facebook'); hasError = true; }
+  else if (fb.length > 100) { showFieldError('inputFbError', 'ยาวเกินไป (ไม่เกิน 100 ตัวอักษร)'); hasError = true; }
   if (!charName) { showFieldError('inputCharNameError', 'กรุณากรอกชื่อตัวละคร'); hasError = true; }
+  else if (charName.length > 100) { showFieldError('inputCharNameError', 'ยาวเกินไป (ไม่เกิน 100 ตัวอักษร)'); hasError = true; }
   if (hasError) return;
 
   const entries = Object.entries(cart);
@@ -284,10 +286,12 @@ async function searchHistory() {
         completed: 'เสร็จแล้ว',
         cancelled: 'ยกเลิก'
       };
-      const statusClass = order.status || 'pending';
-      const statusText = statusMap[order.status] || order.status;
+      const validStatuses = ['pending', 'completed', 'cancelled'];
+      const statusClass = validStatuses.includes(order.status) ? order.status : 'pending';
+      const statusText = statusMap[order.status] || escapeHtml(order.status);
 
-      const itemsText = order.items.map(i => `${i.name} x${i.qty}`).join(', ');
+      const items = Array.isArray(order.items) ? order.items : [];
+      const itemsText = items.map(i => `${escapeHtml(i.name)} x${i.qty}`).join(', ');
 
       return `
         <div class="order-card">
@@ -330,6 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Item modal
   document.getElementById('qtyMinus').addEventListener('click', () => {
+    if (!currentItem) return;
     if (currentQty > 1) {
       currentQty--;
       const inCart = cart[currentItem.id] ? cart[currentItem.id].qty : 0;
@@ -338,6 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('qtyPlus').addEventListener('click', () => {
+    if (!currentItem) return;
     const inCart = cart[currentItem.id] ? cart[currentItem.id].qty : 0;
     const maxQty = currentItem.stock - inCart;
     if (currentQty < maxQty) {
