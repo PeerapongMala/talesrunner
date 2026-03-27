@@ -29,8 +29,8 @@ service cloud.firestore {
                     && request.resource.data.totalPrice is number
                     && request.resource.data.totalPrice > 0
                     && request.resource.data.status == 'pending';
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-                    && request.resource.data.status in ['pending', 'completed', 'cancelled'];
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledBy']);
+      allow delete: if true;
     }
 
     // settings - อ่านได้อย่างเดียว (เปลี่ยนผ่าน Firebase Console เท่านั้น)

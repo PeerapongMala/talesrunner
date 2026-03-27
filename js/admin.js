@@ -14,6 +14,15 @@ function setupPassword() {
   const btn = document.getElementById('passwordSubmit');
   const error = document.getElementById('passwordError');
 
+  // ถ้าเคย login แล้วใน session นี้ ข้ามไปเลย
+  if (sessionStorage.getItem('adminAuth') === 'true') {
+    modal.classList.remove('active');
+    document.getElementById('adminContent').style.display = 'block';
+    loadOrders();
+    loadProducts();
+    return;
+  }
+
   async function tryLogin() {
     btn.disabled = true;
     btn.textContent = 'กำลังตรวจสอบ...';
@@ -29,6 +38,7 @@ function setupPassword() {
 
       const adminPassword = doc.data().password;
       if (input.value === adminPassword) {
+        sessionStorage.setItem('adminAuth', 'true');
         modal.classList.remove('active');
         document.getElementById('adminContent').style.display = 'block';
         loadOrders();
@@ -68,52 +78,88 @@ function setupTabs() {
   });
 }
 
-// ============ LOAD ORDERS ============
-async function loadOrders() {
+// ============ LOAD ORDERS (Real-time) ============
+let knownOrderIds = new Set();
+let firstLoad = true;
+
+function loadOrders() {
   const board = document.getElementById('orderBoard');
 
-  try {
-    const snapshot = await db.collection('orders')
-      .orderBy('createdAt', 'desc')
-      .get();
+  db.collection('orders')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snapshot => {
+      // นับสถานะ
+      let pending = 0, completed = 0, cancelled = 0;
+      snapshot.docs.forEach(doc => {
+        const s = doc.data().status || 'pending';
+        if (s === 'pending') pending++;
+        else if (s === 'completed') completed++;
+        else if (s === 'cancelled') cancelled++;
+      });
 
-    if (snapshot.empty) {
-      board.innerHTML = '<p style="color:#aaa;text-align:center;">ยังไม่มี order</p>';
-      return;
-    }
+      document.getElementById('pendingCounter').textContent = 'รอดำเนินการ: ' + pending;
+      document.getElementById('completedCounter').textContent = 'เสร็จแล้ว: ' + completed;
+      document.getElementById('cancelledCounter').textContent = 'ยกเลิก: ' + cancelled;
 
-    board.innerHTML = snapshot.docs.map(doc => {
-      const order = doc.data();
-      const date = order.createdAt ? order.createdAt.toDate().toLocaleString('th-TH') : '-';
-      const itemsText = order.items.map(i => `${i.name} x${i.qty} = ${i.subtotal}฿`).join('<br>');
-      const status = order.status || 'pending';
+      // หา order ใหม่
+      const newIds = new Set();
+      if (!firstLoad) {
+        snapshot.docs.forEach(doc => {
+          if (!knownOrderIds.has(doc.id)) newIds.add(doc.id);
+        });
+        if (newIds.size > 0) {
+          showToast('Order ใหม่ +' + newIds.size + ' | รอดำเนินการ: ' + pending);
+        }
+      }
+      knownOrderIds = new Set(snapshot.docs.map(doc => doc.id));
+      firstLoad = false;
 
-      return `
-        <div class="admin-order-card">
-          <div class="admin-order-header">
-            <span style="font-weight:600;">FB: ${order.facebook}</span>
-            <span style="font-size:13px;color:#aaa;">${date}</span>
+      if (snapshot.empty) {
+        board.innerHTML = '<p style="color:#aaa;text-align:center;">ยังไม่มี order</p>';
+        return;
+      }
+
+      const total = snapshot.docs.length;
+      board.innerHTML = snapshot.docs.map((doc, index) => {
+        const order = doc.data();
+        const date = order.createdAt ? order.createdAt.toDate().toLocaleString('th-TH') : '-';
+        const itemsText = order.items.map(i => `${i.name} x${i.qty}`).join('<br>');
+        const status = order.status || 'pending';
+        const isNew = newIds.has(doc.id);
+        const orderNum = total - index;
+
+        return `
+          <div class="admin-order-card ${isNew ? 'order-new' : ''}">
+            ${isNew ? '<span class="new-badge">ใหม่</span>' : ''}
+            <div class="admin-order-header">
+              <span style="font-weight:600;color:#e0b0ff;">#${orderNum}</span>
+              <span style="font-weight:600;">FB: ${order.facebook}</span>
+              <span style="font-size:13px;color:#aaa;">${date}</span>
+            </div>
+            <div class="admin-order-info">
+              <div>ตัวละคร: <strong>${order.characterName}</strong></div>
+              <div style="margin-top:8px;">${itemsText}</div>
+              <div style="color:#ff69b4;font-weight:600;margin-top:8px;">รวม ${order.totalPrice} บาท</div>
+            </div>
+            <div class="admin-order-actions">
+              <select onchange="updateOrderStatus('${doc.id}', this.value)">
+                <option value="pending" ${status === 'pending' ? 'selected' : ''}>รอดำเนินการ</option>
+                <option value="completed" ${status === 'completed' ? 'selected' : ''}>เสร็จแล้ว</option>
+                <option value="cancelled" ${status === 'cancelled' ? 'selected' : ''}>ยกเลิก</option>
+              </select>
+              <select class="admin-handler-select" onchange="updateOrderHandler('${doc.id}', this.value)">
+                <option value="" ${!order.handledBy ? 'selected' : ''}>ผู้ดูแล</option>
+                <option value="พี" ${order.handledBy === 'พี' ? 'selected' : ''}>พี</option>
+                <option value="เลย์" ${order.handledBy === 'เลย์' ? 'selected' : ''}>เลย์</option>
+              </select>
+            </div>
           </div>
-          <div class="admin-order-info">
-            <div>ตัวละคร: <strong>${order.characterName}</strong></div>
-            <div style="margin-top:8px;">${itemsText}</div>
-            <div style="color:#ff69b4;font-weight:600;margin-top:8px;">รวม ${order.totalPrice} บาท</div>
-          </div>
-          <div class="admin-order-actions">
-            <select onchange="updateOrderStatus('${doc.id}', this.value)">
-              <option value="pending" ${status === 'pending' ? 'selected' : ''}>รอดำเนินการ</option>
-              <option value="completed" ${status === 'completed' ? 'selected' : ''}>เสร็จแล้ว</option>
-              <option value="cancelled" ${status === 'cancelled' ? 'selected' : ''}>ยกเลิก</option>
-            </select>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-  } catch (e) {
-    console.error(e);
-    board.innerHTML = '<p style="color:#ff6b6b;text-align:center;">โหลด order ไม่ได้</p>';
-  }
+        `;
+      }).join('');
+    }, e => {
+      console.error(e);
+      board.innerHTML = '<p style="color:#ff6b6b;text-align:center;">โหลด order ไม่ได้</p>';
+    });
 }
 
 // ============ UPDATE ORDER STATUS ============
@@ -121,7 +167,16 @@ async function updateOrderStatus(orderId, newStatus) {
   try {
     await db.collection('orders').doc(orderId).update({ status: newStatus });
   } catch (e) {
-    alert('อัพเดทสถานะไม่ได้: ' + e.message);
+    showAlert('อัพเดทสถานะไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+// ============ UPDATE ORDER HANDLER ============
+async function updateOrderHandler(orderId, handler) {
+  try {
+    await db.collection('orders').doc(orderId).update({ handledBy: handler });
+  } catch (e) {
+    showAlert('อัพเดทผู้ดูแลไม่ได้: ' + e.message, 'ผิดพลาด');
   }
 }
 
@@ -130,28 +185,27 @@ async function loadProducts() {
   const tbody = document.getElementById('productTableBody');
 
   try {
-    const snapshot = await db.collection('items').orderBy('createdAt', 'asc').get();
+    const snapshot = await db.collection('items').get();
 
     if (snapshot.empty) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;">ยังไม่มีสินค้า</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#aaa;">ยังไม่มีสินค้า</td></tr>';
       return;
     }
 
-    tbody.innerHTML = snapshot.docs.map(doc => {
+    tbody.innerHTML = snapshot.docs.map((doc, index) => {
       const item = doc.data();
       return `
         <tr>
+          <td style="text-align:center;color:#e0b0ff;font-weight:600;">${index + 1}</td>
           <td><img src="${item.image}" alt="${item.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22><rect fill=%22%23333%22 width=%2250%22 height=%2250%22/></svg>'"></td>
           <td>${item.name}</td>
           <td>${item.price} บาท</td>
-          <td>
-            <span style="font-weight:600;margin-right:8px;">${item.stock}</span>
-            <button class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="openAddStockModal('${doc.id}', '${item.name.replace(/'/g, "\\'")}')">+ เพิ่ม</button>
-            <button style="background:none;border:none;color:#aaa;cursor:pointer;font-size:16px;margin-left:4px;" onclick="openStockHistory('${doc.id}', '${item.name.replace(/'/g, "\\'")}')">&#128065;</button>
-          </td>
-          <td>
-            <button class="btn-secondary" style="padding:4px 10px;font-size:12px;margin-right:6px;" onclick="openEditProductModal('${doc.id}', ${JSON.stringify(item.name)}, ${item.price}, ${JSON.stringify(item.image || '')})">แก้ไข</button>
-            <button class="btn-danger" onclick="deleteProduct('${doc.id}')">ลบ</button>
+          <td style="font-weight:600;text-align:center;">${item.stock}</td>
+          <td style="text-align:center;"><button class="btn-icon" onclick="openAddStockModal('${doc.id}', '${item.name.replace(/'/g, "\\'")}')">+</button></td>
+          <td style="text-align:center;"><button class="btn-icon" onclick="openStockHistory('${doc.id}', '${item.name.replace(/'/g, "\\'")}')">&#128065;</button></td>
+          <td style="text-align:center;white-space:nowrap;">
+            <button class="btn-icon" onclick="openEditProductModal('${doc.id}', ${JSON.stringify(item.name)}, ${item.price}, ${JSON.stringify(item.image || '')})" title="แก้ไข"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+            <button class="btn-icon btn-icon-danger" onclick="deleteProduct('${doc.id}')" title="ลบ"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
           </td>
         </tr>
       `;
@@ -159,7 +213,7 @@ async function loadProducts() {
 
   } catch (e) {
     console.error(e);
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff6b6b;">โหลดสินค้าไม่ได้</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#ff6b6b;">โหลดสินค้าไม่ได้</td></tr>';
   }
 }
 
@@ -224,7 +278,7 @@ async function confirmAddStock() {
     closeAddStockModal();
     loadProducts();
   } catch (e) {
-    alert('เพิ่ม stock ไม่ได้: ' + e.message);
+    showAlert('เพิ่ม stock ไม่ได้: ' + e.message, 'ผิดพลาด');
   } finally {
     btn.disabled = false;
     btn.textContent = 'เพิ่ม Stock';
@@ -341,12 +395,14 @@ async function addProduct() {
   const name = document.getElementById('pName').value.trim();
   const price = parseInt(document.getElementById('pPrice').value);
   const stock = parseInt(document.getElementById('pStock').value);
+  const addedBy = document.getElementById('pAddedBy').value.trim();
 
   let hasError = false;
   if (!name) { showFieldError('pNameError', 'กรุณากรอกชื่อสินค้า'); hasError = true; }
   if (!price || price <= 0) { showFieldError('pPriceError', 'กรุณากรอกราคา'); hasError = true; }
   if (isNaN(stock) || stock < 0) { showFieldError('pStockError', 'กรุณากรอกจำนวน stock'); hasError = true; }
   if (!addImageBase64) { showFieldError('pImageError', 'กรุณาเลือกรูปสินค้า'); hasError = true; }
+  if (!addedBy) { showFieldError('pAddedByError', 'กรุณากรอกชื่อคนเพิ่ม'); hasError = true; }
   if (hasError) return;
 
   const btn = document.getElementById('addProductBtn');
@@ -354,7 +410,7 @@ async function addProduct() {
   btn.textContent = 'กำลังเพิ่ม...';
 
   try {
-    await db.collection('items').add({
+    const docRef = await db.collection('items').add({
       name,
       price,
       stock,
@@ -362,10 +418,19 @@ async function addProduct() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
+    // บันทึกประวัติ stock ครั้งแรก
+    if (stock > 0) {
+      await docRef.collection('stockHistory').add({
+        qty: stock,
+        addedBy: addedBy,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
     closeAddProductModal();
     loadProducts();
   } catch (e) {
-    alert('เพิ่มสินค้าไม่ได้: ' + e.message);
+    showAlert('เพิ่มสินค้าไม่ได้: ' + e.message, 'ผิดพลาด');
   } finally {
     btn.disabled = false;
     btn.textContent = 'เพิ่มสินค้า';
@@ -380,6 +445,7 @@ function openAddProductModal() {
   document.getElementById('pPrice').value = '';
   document.getElementById('pStock').value = '';
   document.getElementById('pImage').value = '';
+  document.getElementById('pAddedBy').value = '';
   document.getElementById('addImagePreview').style.display = 'none';
   document.getElementById('addImageUploadText').textContent = 'คลิกเพื่อเลือกรูป';
   document.getElementById('addProductModal').classList.add('active');
@@ -446,7 +512,7 @@ async function confirmEditProduct() {
     closeEditProductModal();
     loadProducts();
   } catch (e) {
-    alert('แก้ไขไม่ได้: ' + e.message);
+    showAlert('แก้ไขไม่ได้: ' + e.message, 'ผิดพลาด');
   } finally {
     btn.disabled = false;
     btn.textContent = 'บันทึก';
@@ -455,13 +521,14 @@ async function confirmEditProduct() {
 
 // ============ DELETE PRODUCT ============
 async function deleteProduct(itemId) {
-  if (!confirm('ต้องการลบสินค้านี้?')) return;
+  const yes = await showConfirm('ต้องการลบสินค้านี้?', 'ยืนยันการลบ');
+  if (!yes) return;
 
   try {
     await db.collection('items').doc(itemId).delete();
     loadProducts();
   } catch (e) {
-    alert('ลบไม่ได้: ' + e.message);
+    showAlert('ลบไม่ได้: ' + e.message, 'ผิดพลาด');
   }
 }
 
