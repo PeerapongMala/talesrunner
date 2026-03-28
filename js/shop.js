@@ -26,11 +26,15 @@ function loadItems() {
       items.sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity));
 
       // ตรวจจับ stock ลดลง (มีคนซื้อไป) — toast แจ้งเตือน
+      // ข้าม toast ถ้า admin เป็นคนลด stock (_adminAdjust เปลี่ยน)
       if (prevItems.length > 0) {
         const changed = [];
         for (const newItem of items) {
           const old = prevItems.find((i) => i.id === newItem.id);
           if (old && newItem.stock < old.stock) {
+            const oldAdj = old._adminAdjust ? old._adminAdjust.seconds : 0;
+            const newAdj = newItem._adminAdjust ? newItem._adminAdjust.seconds : 0;
+            if (newAdj !== oldAdj) continue; // admin ลดเอง ไม่ toast
             changed.push({ name: newItem.name, qty: old.stock - newItem.stock, image: newItem.image });
           }
         }
@@ -672,6 +676,25 @@ function setupEscapeKey() {
   });
 }
 
+// ============ SHOP HOURS ============
+function updateShopHours() {
+  const el = document.getElementById('shopHoursStatus');
+  if (!el) return;
+  const now = new Date();
+  const day = now.getDay(); // 0=อา, 6=ส
+  const hour = now.getHours();
+  const isWeekend = day === 0 || day === 6;
+  // จ-ศ 20:00-01:00 (ข้ามวัน) | ส-อา 10:00-23:59
+  const isOpen = isWeekend ? (hour >= 10) : (hour >= 20 || hour < 1);
+  if (isOpen) {
+    el.textContent = 'ร้านเปิดอยู่';
+    el.className = 'shop-hours-status open';
+  } else {
+    el.textContent = isWeekend ? 'ร้านปิดอยู่ — เปิด 10:00 น.' : 'ร้านปิดอยู่ — เปิด 20:00 น.';
+    el.className = 'shop-hours-status closed';
+  }
+}
+
 // ============ EVENT LISTENERS ============
 document.addEventListener("DOMContentLoaded", () => {
   setupTabs();
@@ -680,6 +703,8 @@ document.addEventListener("DOMContentLoaded", () => {
   loadBlocklist();
   listenShopStatus();
   restoreToasts();
+  updateShopHours();
+  setInterval(updateShopHours, 60000);
 
   // Item modal
   document.getElementById("qtyMinus").addEventListener("click", () => {
@@ -774,16 +799,20 @@ function listenShopStatus() {
     const banner = document.getElementById("shopClosedBanner");
     const grid = document.getElementById("itemGrid");
     const rightCol = document.getElementById("rightColumn");
+    const hoursEl = document.getElementById("shopHours");
     if (shopOpen) {
       banner.classList.remove("active");
       grid.style.opacity = "";
       grid.style.pointerEvents = "";
       if (rightCol) rightCol.style.display = "";
+      if (hoursEl) hoursEl.style.display = "";
+      updateShopHours();
     } else {
       banner.classList.add("active");
       grid.style.opacity = "0.4";
       grid.style.pointerEvents = "none";
       if (rightCol) rightCol.style.display = "none";
+      if (hoursEl) hoursEl.style.display = "none";
     }
   });
 }

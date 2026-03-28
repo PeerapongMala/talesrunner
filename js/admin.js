@@ -13,6 +13,7 @@ let allProducts = [];
 let draggedProductId = null;
 let stockMode = 'add'; // 'add' | 'reduce'
 let currentAdminName = '';
+const stockAccum = {}; // { itemId: { total, timer } }
 
 const ADMIN_UID_MAP = {
   'yh9dSe2xjKPmDFcJFOcnZRex0Zi1': 'พี'
@@ -329,6 +330,11 @@ function loadProducts() {
         </tr>
       `;
     }).join('');
+
+    // Restore active accum badges after re-render
+    Object.keys(stockAccum).forEach(id => {
+      if (stockAccum[id].total !== 0) showStockAccumBadge(id, stockAccum[id].total);
+    });
   }, (e) => {
     console.error(e);
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#ff6b6b;">โหลดสินค้าไม่ได้</td></tr>';
@@ -359,10 +365,21 @@ async function quickStockAdjust(itemId, itemName, delta) {
     }
   }
 
+  // Show accumulator badge
+  if (!stockAccum[itemId]) stockAccum[itemId] = { total: 0, timer: null };
+  stockAccum[itemId].total += delta;
+  clearTimeout(stockAccum[itemId].timer);
+  showStockAccumBadge(itemId, stockAccum[itemId].total);
+  stockAccum[itemId].timer = setTimeout(() => {
+    fadeStockAccumBadge(itemId);
+    delete stockAccum[itemId];
+  }, 3000);
+
   try {
     const batch = db.batch();
     batch.update(db.collection('items').doc(itemId), {
-      stock: firebase.firestore.FieldValue.increment(delta)
+      stock: firebase.firestore.FieldValue.increment(delta),
+      _adminAdjust: firebase.firestore.FieldValue.serverTimestamp()
     });
     batch.set(db.collection('items').doc(itemId).collection('stockHistory').doc(), {
       qty: delta,
@@ -373,6 +390,30 @@ async function quickStockAdjust(itemId, itemName, delta) {
   } catch (e) {
     showAlert('แก้ stock ไม่ได้: ' + e.message, 'ผิดพลาด');
   }
+}
+
+function showStockAccumBadge(itemId, total) {
+  let badge = document.querySelector(`.stock-accum-badge[data-item-id="${itemId}"]`);
+  if (!badge) {
+    const btnGroup = document.querySelector(`button[data-action="addStock"][data-id="${itemId}"]`);
+    if (!btnGroup) return;
+    badge = document.createElement('span');
+    badge.className = 'stock-accum-badge';
+    badge.dataset.itemId = itemId;
+    btnGroup.closest('.stock-btn-group').appendChild(badge);
+  }
+  badge.textContent = (total > 0 ? '+' : '') + total;
+  badge.className = 'stock-accum-badge ' + (total > 0 ? 'positive' : total < 0 ? 'negative' : '');
+  badge.style.opacity = '1';
+  badge.style.transition = 'none';
+}
+
+function fadeStockAccumBadge(itemId) {
+  const badge = document.querySelector(`.stock-accum-badge[data-item-id="${itemId}"]`);
+  if (!badge) return;
+  badge.style.transition = 'opacity 0.5s ease';
+  badge.style.opacity = '0';
+  setTimeout(() => badge.remove(), 500);
 }
 
 // ============ ADD STOCK MODAL ============
@@ -429,7 +470,8 @@ async function confirmAddStock() {
     const delta = isReduce ? -qty : qty;
     const batch = db.batch();
     batch.update(db.collection('items').doc(currentStockItemId), {
-      stock: firebase.firestore.FieldValue.increment(delta)
+      stock: firebase.firestore.FieldValue.increment(delta),
+      _adminAdjust: firebase.firestore.FieldValue.serverTimestamp()
     });
     batch.set(db.collection('items').doc(currentStockItemId).collection('stockHistory').doc(), {
       qty: delta,
