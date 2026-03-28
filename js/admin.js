@@ -1,5 +1,5 @@
 // ============================================
-// PEERAPONG SHOP - Admin Logic
+// BubbleShop - Admin Logic
 // ============================================
 
 let currentStockItemId = null;
@@ -9,8 +9,18 @@ let editImageBase64 = null;
 let adminNames = ['พี', 'เลย์']; // default, โหลดจาก Firestore ทีหลัง
 let unsubOrders = null; // เก็บ unsubscribe ป้องกัน duplicate listener
 let unsubProducts = null;
+let allProducts = [];
+let draggedProductId = null;
+let stockMode = 'add'; // 'add' | 'reduce'
+let currentAdminName = '';
 
-const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+const ADMIN_UID_MAP = {
+  'yh9dSe2xjKPmDFcJFOcnZRex0Zi1': 'พี'
+};
+
+function formatPrice(v) { const n = Number(v) || 0; return n % 1 === 0 ? n.toString() : n.toFixed(2); }
+
+const MAX_IMAGE_SIZE = 500 * 1024; // 500KB (base64 ~680KB, safe for Firestore 1MB limit)
 
 // ============ LOAD ADMIN NAMES FROM FIRESTORE ============
 async function loadAdminNames() {
@@ -31,26 +41,35 @@ function renderAdminOptions(selectedValue) {
     ).join('');
 }
 
-// ============ PASSWORD CHECK (from Firestore) ============
+// ============ FIREBASE AUTH LOGIN ============
 function setupLogin() {
   const modal = document.getElementById('passwordModal');
-  const passInput = document.getElementById('passwordInput');
+  const emailInput = document.getElementById('loginEmail');
+  const passInput = document.getElementById('loginPassword');
   const btn = document.getElementById('passwordSubmit');
   const error = document.getElementById('passwordError');
 
-  // ถ้าเคย login แล้วใน session นี้ ข้ามไปเลย
-  if (sessionStorage.getItem('adminAuth') === 'true') {
-    modal.classList.remove('active');
-    document.getElementById('adminContent').style.display = 'block';
-    loadAdminNames().then(() => { loadOrders(); loadProducts(); listenShopToggle(); });
-    return;
-  }
+  // ถ้า login อยู่แล้ว ข้ามไปเลย
+  firebase.auth().onAuthStateChanged(async (user) => {
+    if (user) {
+      modal.classList.remove('active');
+      document.getElementById('adminContent').style.display = 'block';
+      currentAdminName = ADMIN_UID_MAP[user.uid] || '';
+      await loadAdminNames();
+      await initSortOrder();
+      loadOrders();
+      loadProducts();
+      loadBanList();
+      listenShopToggle();
+    }
+  });
 
   async function tryLogin() {
+    const email = emailInput.value.trim();
     const pass = passInput.value;
 
-    if (!pass) {
-      error.textContent = 'กรุณากรอกรหัสผ่าน';
+    if (!email || !pass) {
+      error.textContent = 'กรุณากรอก Email และรหัสผ่าน';
       error.style.display = 'block';
       return;
     }
@@ -60,30 +79,16 @@ function setupLogin() {
     error.style.display = 'none';
 
     try {
-      const doc = await db.collection('settings').doc('admin').get();
-      if (!doc.exists) {
-        error.textContent = 'ยังไม่ได้ตั้งรหัสผ่าน (settings/admin)';
-        error.style.display = 'block';
-        return;
-      }
-
-      if (pass === doc.data().password) {
-        sessionStorage.setItem('adminAuth', 'true');
-        modal.classList.remove('active');
-        document.getElementById('adminContent').style.display = 'block';
-        await loadAdminNames();
-        loadOrders();
-        loadProducts();
-        listenShopToggle();
-      } else {
-        error.textContent = 'รหัสผ่านไม่ถูกต้อง';
-        error.style.display = 'block';
-        passInput.value = '';
-        passInput.focus();
-      }
+      await firebase.auth().signInWithEmailAndPassword(email, pass);
+      // onAuthStateChanged จะจัดการเปิดหน้า admin เอง
     } catch (e) {
-      error.textContent = 'เชื่อมต่อไม่ได้: ' + e.message;
+      const msg = e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential'
+        ? 'Email หรือรหัสผ่านไม่ถูกต้อง'
+        : 'เข้าสู่ระบบไม่ได้: ' + e.message;
+      error.textContent = msg;
       error.style.display = 'block';
+      passInput.value = '';
+      passInput.focus();
     } finally {
       btn.disabled = false;
       btn.textContent = 'เข้าสู่ระบบ';
@@ -94,6 +99,24 @@ function setupLogin() {
   passInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') tryLogin();
   });
+}
+
+// ============ INIT SORT ORDER (ให้ item เก่าที่ยังไม่มี sortOrder) ============
+async function initSortOrder() {
+  try {
+    const snapshot = await db.collection('items').orderBy('createdAt', 'asc').get();
+    const batch = db.batch();
+    let needsUpdate = false;
+    snapshot.docs.forEach((doc, index) => {
+      if (doc.data().sortOrder == null) {
+        batch.update(doc.ref, { sortOrder: index });
+        needsUpdate = true;
+      }
+    });
+    if (needsUpdate) await batch.commit();
+  } catch (e) {
+    console.warn('initSortOrder:', e.message);
+  }
 }
 
 // ============ TABS ============
@@ -125,6 +148,7 @@ function loadOrders() {
 
   unsubOrders = db.collection('orders')
     .orderBy('createdAt', 'desc')
+    .limit(30)
     .onSnapshot(snapshot => {
       // นับสถานะ
       let pending = 0, completed = 0, cancelled = 0;
@@ -180,7 +204,7 @@ function loadOrders() {
             <div class="admin-order-info">
               <div>ตัวละคร: <strong>${escapeHtml(order.characterName)}</strong></div>
               <div style="margin-top:8px;">${itemsText}</div>
-              <div style="color:#ff69b4;font-weight:600;margin-top:8px;">รวม ${Number(order.totalPrice) || 0} บาท</div>
+              <div style="color:#ff69b4;font-weight:600;margin-top:8px;">รวม ${formatPrice(order.totalPrice)} บาท</div>
             </div>
             <div class="admin-order-actions">
               <span class="order-status-badge ${status}">${status === 'pending' ? 'รอดำเนินการ' : status === 'completed' ? 'เสร็จแล้ว' : 'ยกเลิก'}</span>
@@ -188,9 +212,9 @@ function loadOrders() {
                 <option value="" ${!order.handledBy ? 'selected' : ''}>ผู้ดูแล</option>
                 ${adminNames.map(name => `<option value="${escapeHtml(name)}" ${order.handledBy === name ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('')}
               </select>
-              ${status === 'pending' ? `<button class="btn-icon btn-icon-success" data-action="complete" data-id="${docId}" title="สำเร็จ" style="font-size:13px;">&#10003;</button>` : ''}
-              ${status === 'pending' ? `<button class="btn-icon btn-icon-cancel" data-action="cancel" data-id="${docId}" title="ยกเลิก" style="font-size:13px;">&#10005;</button>` : ''}
-              <button class="btn-icon btn-icon-danger" data-action="ban" data-fb="${fbEscaped}" title="บล็อก FB นี้" style="font-size:11px;">BAN</button>
+              ${status === 'pending' ? `<button class="btn-order-action btn-order-complete" data-action="complete" data-id="${docId}">&#10003; สำเร็จ</button>` : ''}
+              ${status === 'pending' ? `<button class="btn-order-action btn-order-cancel" data-action="cancel" data-id="${docId}">&#10005; ยกเลิก</button>` : ''}
+              <button class="btn-order-action btn-order-ban" data-action="ban" data-fb="${fbEscaped}">BAN</button>
             </div>
           </div>
         `;
@@ -280,24 +304,27 @@ function loadProducts() {
 
   unsubProducts = db.collection('items').onSnapshot(snapshot => {
     if (snapshot.empty) {
+      allProducts = [];
       tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#aaa;">ยังไม่มีสินค้า</td></tr>';
       return;
     }
 
-    tbody.innerHTML = snapshot.docs.map((doc, index) => {
-      const item = doc.data();
+    allProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    allProducts.sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity));
+
+    tbody.innerHTML = allProducts.map((item, index) => {
       return `
-        <tr>
-          <td style="text-align:center;color:#e0b0ff;font-weight:600;">${index + 1}</td>
+        <tr draggable="true" data-id="${item.id}">
+          <td style="text-align:center;"><span class="drag-handle">☰</span> <span style="color:#e0b0ff;font-weight:600;">${index + 1}</span></td>
           <td><img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22><rect fill=%22%23333%22 width=%2250%22 height=%2250%22/></svg>'"></td>
           <td>${escapeHtml(item.name)}</td>
-          <td>${Number(item.price) || 0} บาท</td>
+          <td>${formatPrice(item.price)} บาท</td>
           <td style="font-weight:600;text-align:center;">${Number(item.stock) || 0}</td>
-          <td style="text-align:center;"><button class="btn-icon" data-action="addStock" data-id="${doc.id}" data-name="${escapeHtml(item.name)}">+</button></td>
-          <td style="text-align:center;"><button class="btn-icon" data-action="stockHistory" data-id="${doc.id}" data-name="${escapeHtml(item.name)}">&#128065;</button></td>
+          <td style="text-align:center;white-space:nowrap;"><button class="btn-stock-add" data-action="addStock" data-id="${item.id}" data-name="${escapeHtml(item.name)}">+</button> <button class="btn-stock-reduce" data-action="reduceStock" data-id="${item.id}" data-name="${escapeHtml(item.name)}">-</button></td>
+          <td style="text-align:center;"><button class="btn-icon" data-action="stockHistory" data-id="${item.id}" data-name="${escapeHtml(item.name)}">&#128065;</button></td>
           <td style="text-align:center;white-space:nowrap;">
-            <button class="btn-icon" data-action="edit" data-id="${doc.id}" data-name="${escapeHtml(item.name)}" data-price="${Number(item.price) || 0}" data-image="${escapeHtml(item.image || '')}" title="แก้ไข"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
-            <button class="btn-icon btn-icon-danger" data-action="delete" data-id="${doc.id}" title="ลบ"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
+            <button class="btn-icon" data-action="edit" data-id="${item.id}" data-name="${escapeHtml(item.name)}" data-price="${Number(item.price) || 0}" data-image="${escapeHtml(item.image || '')}" title="แก้ไข"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+            <button class="btn-icon btn-icon-danger" data-action="delete" data-id="${item.id}" title="ลบ"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
           </td>
         </tr>
       `;
@@ -322,14 +349,46 @@ function clearFieldErrors() {
   });
 }
 
+// ============ QUICK STOCK ADJUST (กด +/- ทีละ 1) ============
+async function quickStockAdjust(itemId, itemName, delta) {
+  if (delta < 0) {
+    const product = allProducts.find(p => p.id === itemId);
+    if (product && (Number(product.stock) || 0) <= 0) {
+      showToast(`${itemName} stock เป็น 0 แล้ว`);
+      return;
+    }
+  }
+
+  try {
+    const batch = db.batch();
+    batch.update(db.collection('items').doc(itemId), {
+      stock: firebase.firestore.FieldValue.increment(delta)
+    });
+    batch.set(db.collection('items').doc(itemId).collection('stockHistory').doc(), {
+      qty: delta,
+      addedBy: currentAdminName,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await batch.commit();
+  } catch (e) {
+    showAlert('แก้ stock ไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
 // ============ ADD STOCK MODAL ============
-function openAddStockModal(itemId, itemName) {
+function openAddStockModal(itemId, itemName, mode) {
   currentStockItemId = itemId;
   currentStockItemName = itemName;
+  stockMode = mode || 'add';
   clearFieldErrors();
   document.getElementById('addStockItemName').textContent = itemName;
   document.getElementById('addStockQty').value = '';
-  document.getElementById('addStockBy').innerHTML = renderAdminOptions('');
+  document.getElementById('addStockBy').innerHTML = renderAdminOptions(currentAdminName);
+
+  const isReduce = stockMode === 'reduce';
+  document.getElementById('addStockModal').querySelector('h2').textContent = isReduce ? 'ลด Stock' : 'เพิ่ม Stock';
+  document.getElementById('confirmAddStock').textContent = isReduce ? 'ลด Stock' : 'เพิ่ม Stock';
+  document.querySelector('label[for="addStockQty"]').textContent = isReduce ? 'จำนวนที่ลด' : 'จำนวนที่เพิ่ม';
   document.getElementById('addStockModal').classList.add('active');
 }
 
@@ -353,13 +412,27 @@ async function confirmAddStock() {
   btn.textContent = 'กำลังเพิ่ม...';
 
   try {
-    // เพิ่ม stock + บันทึกประวัติ (atomic)
+    const isReduce = stockMode === 'reduce';
+
+    // ถ้าลด → เช็คว่า stock พอมั้ย
+    if (isReduce) {
+      const product = allProducts.find(p => p.id === currentStockItemId);
+      const currentStock = product ? (Number(product.stock) || 0) : 0;
+      if (qty > currentStock) {
+        showFieldError('addStockQtyError', `stock มีแค่ ${currentStock} ลดไม่ได้`);
+        btn.disabled = false;
+        btn.textContent = 'ลด Stock';
+        return;
+      }
+    }
+
+    const delta = isReduce ? -qty : qty;
     const batch = db.batch();
     batch.update(db.collection('items').doc(currentStockItemId), {
-      stock: firebase.firestore.FieldValue.increment(qty)
+      stock: firebase.firestore.FieldValue.increment(delta)
     });
     batch.set(db.collection('items').doc(currentStockItemId).collection('stockHistory').doc(), {
-      qty,
+      qty: delta,
       addedBy,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -367,10 +440,10 @@ async function confirmAddStock() {
 
     closeAddStockModal();
   } catch (e) {
-    showAlert('เพิ่ม stock ไม่ได้: ' + e.message, 'ผิดพลาด');
+    showAlert((stockMode === 'reduce' ? 'ลด' : 'เพิ่ม') + ' stock ไม่ได้: ' + e.message, 'ผิดพลาด');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'เพิ่ม Stock';
+    btn.textContent = stockMode === 'reduce' ? 'ลด Stock' : 'เพิ่ม Stock';
   }
 }
 
@@ -387,6 +460,7 @@ async function openStockHistory(itemId, itemName) {
     const snapshot = await db.collection('items').doc(itemId)
       .collection('stockHistory')
       .orderBy('createdAt', 'desc')
+      .limit(100)
       .get();
 
     if (snapshot.empty) {
@@ -409,12 +483,12 @@ async function openStockHistory(itemId, itemName) {
         ${Object.entries(totals).map(([name, total]) =>
           `<div class="stock-summary-item">
             <span>${escapeHtml(name)}</span>
-            <span style="color:#4caf50;font-weight:700;">+${total}</span>
+            <span style="color:${total >= 0 ? '#4caf50' : '#ff4444'};font-weight:700;">${total >= 0 ? '+' : ''}${total}</span>
           </div>`
         ).join('')}
         <div class="stock-summary-total">
           <span>รวมทั้งหมด</span>
-          <span>+${grandTotal}</span>
+          <span>${grandTotal >= 0 ? '+' : ''}${grandTotal}</span>
         </div>
       </div>
     `;
@@ -429,7 +503,7 @@ async function openStockHistory(itemId, itemName) {
             <div style="font-weight:600;">${escapeHtml(h.addedBy)}</div>
             <div style="font-size:12px;color:#aaa;">${date}</div>
           </div>
-          <div style="color:#4caf50;font-weight:600;font-size:16px;">+${h.qty}</div>
+          <div style="color:${h.qty >= 0 ? '#4caf50' : '#ff4444'};font-weight:600;font-size:16px;">${h.qty >= 0 ? '+' : ''}${h.qty}</div>
         </div>
       `;
     }).join('');
@@ -521,7 +595,7 @@ function setupImageUploadArea(areaId, inputId, previewId, textId, onSelect) {
 async function addProduct() {
   clearFieldErrors();
   const name = document.getElementById('pName').value.trim();
-  const price = parseInt(document.getElementById('pPrice').value, 10);
+  const price = parseFloat(document.getElementById('pPrice').value);
   const stock = parseInt(document.getElementById('pStock').value, 10);
   const addedBy = document.getElementById('pAddedBy').value.trim();
 
@@ -541,11 +615,13 @@ async function addProduct() {
     // สร้าง ID ล่วงหน้าเพื่อใช้ batch ได้
     const docRef = db.collection('items').doc();
     const batch = db.batch();
+    const maxSort = allProducts.reduce((max, p) => Math.max(max, p.sortOrder ?? 0), -1);
     batch.set(docRef, {
       name,
       price,
       stock,
       image: addImageBase64,
+      sortOrder: maxSort + 1,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
@@ -576,7 +652,7 @@ function openAddProductModal() {
   document.getElementById('pPrice').value = '';
   document.getElementById('pStock').value = '';
   document.getElementById('pImage').value = '';
-  document.getElementById('pAddedBy').innerHTML = renderAdminOptions('');
+  document.getElementById('pAddedBy').innerHTML = renderAdminOptions(currentAdminName);
   document.getElementById('addImagePreview').style.display = 'none';
   document.getElementById('addImageUploadText').textContent = 'คลิกเพื่อเลือกรูป';
   document.getElementById('addProductModal').classList.add('active');
@@ -620,7 +696,7 @@ function closeEditProductModal() {
 async function confirmEditProduct() {
   clearFieldErrors();
   const name = document.getElementById('editName').value.trim();
-  const price = parseInt(document.getElementById('editPrice').value, 10);
+  const price = parseFloat(document.getElementById('editPrice').value);
 
   let hasError = false;
   if (!name) { showFieldError('editNameError', 'กรุณากรอกชื่อสินค้า'); hasError = true; }
@@ -655,15 +731,12 @@ async function deleteProduct(itemId) {
   if (!yes) return;
 
   try {
-    // ลบ stockHistory subcollection ก่อน
+    // ลบ stockHistory + item ใน batch เดียว (atomic)
     const historySnap = await db.collection('items').doc(itemId).collection('stockHistory').get();
-    if (!historySnap.empty) {
-      const batch = db.batch();
-      historySnap.docs.forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
-    }
-    // ลบ item
-    await db.collection('items').doc(itemId).delete();
+    const batch = db.batch();
+    historySnap.docs.forEach(doc => batch.delete(doc.ref));
+    batch.delete(db.collection('items').doc(itemId));
+    await batch.commit();
   } catch (e) {
     showAlert('ลบไม่ได้: ' + e.message, 'ผิดพลาด');
   }
@@ -719,6 +792,115 @@ async function blockFacebook(fbName) {
   }
 }
 
+// ============ BAN LIST ============
+let unsubBans = null;
+
+function loadBanList() {
+  if (unsubBans) { unsubBans(); unsubBans = null; }
+
+  const container = document.getElementById('banList');
+
+  unsubBans = db.collection('settings').doc('spam').onSnapshot(doc => {
+    const blocked = doc.exists && Array.isArray(doc.data().blocked) ? doc.data().blocked : [];
+
+    if (blocked.length === 0) {
+      container.innerHTML = '<p style="color:#aaa;text-align:center;">ยังไม่มีรายชื่อที่ถูก BAN</p>';
+      return;
+    }
+
+    container.innerHTML = `
+      <p style="color:#aaa;margin-bottom:12px;">ทั้งหมด ${blocked.length} รายชื่อ</p>
+      ${blocked.map(name => `
+        <div class="ban-item">
+          <span class="ban-item-name">${escapeHtml(name)}</span>
+          <button class="btn-order-action btn-order-complete" data-unban="${escapeHtml(name)}">ยกเลิก BAN</button>
+        </div>
+      `).join('')}
+    `;
+  }, e => {
+    console.error(e);
+    container.innerHTML = '<p style="color:#ff6b6b;text-align:center;">โหลดรายชื่อไม่ได้</p>';
+  });
+}
+
+async function unbanFacebook(fbName) {
+  const yes = await showConfirm(`ยกเลิก BAN "${fbName}" ?`, 'ยืนยัน');
+  if (!yes) return;
+
+  try {
+    await db.collection('settings').doc('spam').update({
+      blocked: firebase.firestore.FieldValue.arrayRemove(fbName)
+    });
+    showToast(`ยกเลิก BAN "${fbName}" แล้ว`);
+  } catch (e) {
+    showAlert('ยกเลิก BAN ไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+// ============ DRAG & DROP REORDER ============
+function setupProductDrag() {
+  const tbody = document.getElementById('productTableBody');
+
+  tbody.addEventListener('dragstart', (e) => {
+    const row = e.target.closest('tr[draggable]');
+    if (!row) return;
+    draggedProductId = row.dataset.id;
+    row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  tbody.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const row = e.target.closest('tr[draggable]');
+    if (!row || row.dataset.id === draggedProductId) return;
+    tbody.querySelectorAll('.drag-over').forEach(r => r.classList.remove('drag-over'));
+    row.classList.add('drag-over');
+  });
+
+  tbody.addEventListener('dragleave', (e) => {
+    const row = e.target.closest('tr[draggable]');
+    if (row) row.classList.remove('drag-over');
+  });
+
+  tbody.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    tbody.querySelectorAll('.drag-over, .dragging').forEach(r => r.classList.remove('drag-over', 'dragging'));
+    const targetRow = e.target.closest('tr[draggable]');
+    if (!targetRow || !draggedProductId) return;
+    const targetId = targetRow.dataset.id;
+    if (targetId === draggedProductId) { draggedProductId = null; return; }
+
+    const fromIndex = allProducts.findIndex(p => p.id === draggedProductId);
+    const toIndex = allProducts.findIndex(p => p.id === targetId);
+    if (fromIndex === -1 || toIndex === -1) { draggedProductId = null; return; }
+
+    const [moved] = allProducts.splice(fromIndex, 1);
+    allProducts.splice(toIndex, 0, moved);
+    await saveSortOrder();
+    draggedProductId = null;
+  });
+
+  tbody.addEventListener('dragend', () => {
+    tbody.querySelectorAll('.dragging, .drag-over').forEach(r => r.classList.remove('dragging', 'drag-over'));
+    draggedProductId = null;
+  });
+}
+
+async function saveSortOrder() {
+  try {
+    const batch = db.batch();
+    allProducts.forEach((product, index) => {
+      if (product.sortOrder !== index) {
+        batch.update(db.collection('items').doc(product.id), { sortOrder: index });
+      }
+    });
+    await batch.commit();
+  } catch (e) {
+    showAlert('บันทึกลำดับไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
 // ============ ESCAPE KEY FOR MODALS ============
 function setupEscapeKey() {
   document.addEventListener('keydown', (e) => {
@@ -769,6 +951,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setupImageUploadArea('addImageUploadArea', 'pImage', 'addImagePreview', 'addImageUploadText', (b64) => { addImageBase64 = b64; });
   setupImageUploadArea('editImageUploadArea', 'editImage', 'editImagePreview', 'editImageUploadText', (b64) => { editImageBase64 = b64; });
 
+  setupProductDrag();
+
   document.getElementById('addProductBtn').addEventListener('click', addProduct);
   document.getElementById('openAddProductBtn').addEventListener('click', openAddProductModal);
   document.getElementById('cancelAddProduct').addEventListener('click', closeAddProductModal);
@@ -780,13 +964,21 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('confirmEditProduct').addEventListener('click', confirmEditProduct);
   document.getElementById('cancelEditProduct').addEventListener('click', closeEditProductModal);
 
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await firebase.auth().signOut();
+    location.reload();
+  });
+
   // Event delegation สำหรับปุ่มในตารางสินค้า
   document.getElementById('productTableBody').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const { action, id, name, price, image } = btn.dataset;
-    if (action === 'addStock') openAddStockModal(id, name);
-    else if (action === 'stockHistory') openStockHistory(id, name);
+    if (action === 'addStock') {
+      currentAdminName ? quickStockAdjust(id, name, 1) : openAddStockModal(id, name, 'add');
+    } else if (action === 'reduceStock') {
+      currentAdminName ? quickStockAdjust(id, name, -1) : openAddStockModal(id, name, 'reduce');
+    } else if (action === 'stockHistory') openStockHistory(id, name);
     else if (action === 'edit') openEditProductModal(id, name, Number(price), image);
     else if (action === 'delete') deleteProduct(id);
   });
@@ -817,6 +1009,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (action === 'ban') {
       blockFacebook(btn.dataset.fb);
     }
+  });
+
+  // Unban delegation
+  document.getElementById('banList').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-unban]');
+    if (btn) unbanFacebook(btn.dataset.unban);
   });
 
   // ปิด modal เมื่อกดพื้นหลัง

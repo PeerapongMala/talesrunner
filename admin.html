@@ -8,15 +8,24 @@
     <link rel="stylesheet" href="css/style.css?v=8" />
   </head>
   <body>
-    <!-- PASSWORD MODAL -->
+    <!-- LOGIN MODAL -->
     <div class="modal-overlay active password-modal" id="passwordModal">
       <div class="modal">
         <h2>เข้าสู่ระบบแอดมิน</h2>
         <div class="form-group">
-          <label for="passwordInput">รหัสผ่าน</label>
+          <label for="loginEmail">Email</label>
+          <input
+            type="email"
+            id="loginEmail"
+            placeholder="admin@example.com"
+            autocomplete="email"
+          />
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">รหัสผ่าน</label>
           <input
             type="password"
-            id="passwordInput"
+            id="loginPassword"
             placeholder="กรอกรหัสผ่าน"
             autocomplete="current-password"
           />
@@ -39,9 +48,10 @@
       <!-- HEADER -->
       <header class="header">
         <h1>BubbleShop - ADMIN</h1>
-        <div style="display:flex;gap:10px;align-items:center;">
+        <div class="admin-header-actions">
           <button class="btn-shop-toggle closed" id="shopToggleBtn">กำลังโหลด...</button>
-          <a href="index.html" class="btn-secondary" style="text-decoration: none">กลับหน้าร้าน</a>
+          <a href="index.html" class="btn-header">กลับหน้าร้าน</a>
+          <button class="btn-header btn-header-logout" id="logoutBtn">ออกจากระบบ</button>
         </div>
       </header>
 
@@ -50,6 +60,7 @@
         <div class="admin-tabs">
           <button class="nav-tab active" data-tab="orders">Order Board</button>
           <button class="nav-tab" data-tab="products">จัดการสินค้า</button>
+          <button class="nav-tab" data-tab="bans">BAN List</button>
         </div>
 
         <!-- ORDER BOARD -->
@@ -92,7 +103,7 @@
                 <th style="width: 25%">ชื่อ</th>
                 <th style="width: 12%; text-align: center">ราคา</th>
                 <th style="width: 10%; text-align: center">Stock</th>
-                <th style="width: 10%; text-align: center">เพิ่ม</th>
+                <th style="width: 10%; text-align: center">เพิ่ม/ลด</th>
                 <th style="width: 10%; text-align: center">ประวัติ</th>
                 <th style="width: 12%; text-align: center">จัดการ</th>
               </tr>
@@ -105,6 +116,14 @@
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- BAN LIST -->
+        <div class="admin-section" id="bansSection">
+          <h2 style="margin-bottom: 15px">รายชื่อที่ถูก BAN</h2>
+          <div id="banList">
+            <p style="color: #aaa">กำลังโหลด...</p>
+          </div>
         </div>
       </div>
     </div>
@@ -164,7 +183,7 @@
         </div>
         <div class="form-group">
           <label for="editPrice">ราคา (บาท)</label>
-          <input type="number" id="editPrice" min="0" />
+          <input type="number" id="editPrice" min="0" step="any" />
           <p class="field-error" id="editPriceError"></p>
         </div>
         <div class="form-group">
@@ -216,7 +235,7 @@
         </div>
         <div class="form-group">
           <label for="pPrice">ราคา (บาท)</label>
-          <input type="number" id="pPrice" placeholder="0" min="0" />
+          <input type="number" id="pPrice" placeholder="0" min="0" step="any" />
           <p class="field-error" id="pPriceError"></p>
         </div>
         <div class="form-group">
@@ -272,6 +291,7 @@
 
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="js/firebase-config.js?v=5"></script>
     <script src="js/modal-alert.js?v=5"></script>
