@@ -1,8 +1,9 @@
-# TalesRunner Shop
+# BubbleShop - TalesRunner Item Store
 
-E-commerce web app for selling TalesRunner game items. Built with vanilla HTML/CSS/JS + Firebase.
+E-commerce web app for selling TalesRunner game items.
+Built from scratch in **1 day** with vanilla HTML/CSS/JS + Firebase (no framework).
 
-## Live
+## Live Demo
 
 | Page | URL |
 |------|-----|
@@ -11,127 +12,62 @@ E-commerce web app for selling TalesRunner game items. Built with vanilla HTML/C
 
 ## Tech Stack
 
-- **Frontend:** HTML + CSS + JavaScript (no framework)
-- **Database:** Firebase Firestore
-- **Hosting:** Firebase Hosting (free tier)
-- **Theme:** Purple/pink TalesRunner game style
+- **Frontend:** HTML + CSS + vanilla JavaScript (zero dependencies)
+- **Backend:** Firebase Firestore (realtime database)
+- **Auth:** Firebase Authentication (email/password)
+- **Hosting:** Firebase Hosting
+- **Security:** Firestore rules with field-level validation
+
+## Features
+
+### Customer Shop
+- Product grid with real-time stock badges
+- Item modal with quantity selector and live price calculation
+- Cart side panel with subtotals
+- Order checkout with Facebook name + character name validation
+- Order history search by Facebook name
+- Anti-spam: honeypot, cooldown, captcha, duplicate order check
+
+### Admin Backoffice
+- Firebase Auth login (multi-admin support)
+- Real-time order board with status management (pending / completed / cancelled)
+- Product CRUD with drag & drop reordering
+- Quick stock +/- buttons (instant adjust for personal admin accounts)
+- Stock history log (who added/reduced, when, how much)
+- BAN list management (block/unblock customers)
+- Base64 image upload with size validation (500KB limit)
+- Decimal price support
+
+## Security
+
+- **Firebase Auth** with UID-based admin check (no passwords in database)
+- **Firestore rules** enforce field-level permissions:
+  - Customers can only update stock field (>= 0) and cancel own pending orders
+  - Admin-only: create/delete items, manage settings, update order status
+- **XSS prevention:** event delegation instead of inline handlers, HTML escaping with single quote support
+- **Race condition protection:** Firestore transactions for stock deduction and order cancellation
+- **Anti-bot:** honeypot field, cooldown timer, captcha, server-side field validation
 
 ## Project Structure
 
 ```
-├── index.html              # Customer shop page (single page)
-├── admin.html              # Admin backoffice page (single page)
-├── css/
-│   └── style.css           # TalesRunner purple/pink theme
-├── js/
-│   ├── firebase-config.js  # Firebase project config
-│   ├── shop.js             # Shop logic (cart, modals, orders)
-│   └── admin.js            # Admin logic (products, orders, stock)
-├── assets/                 # Item images (use English filenames only)
-├── firebase.json           # Firebase hosting config
-├── firestore.rules         # Firestore security rules
-├── firestore.indexes.json  # Firestore indexes
-└── .firebaserc             # Firebase project reference
+index.html          # Customer shop page
+admin.html          # Admin backoffice page
+css/style.css       # Purple/pink TalesRunner theme
+js/shop.js          # Shop logic (cart, orders, anti-spam)
+js/admin.js         # Admin logic (products, orders, stock, BAN)
+js/modal-alert.js   # Custom modal & toast notification system
+firestore.rules     # Security rules
+firebase.json       # Hosting config
 ```
 
-## Features
+## Development Timeline
 
-### Shop (index.html)
-
-- **Item grid** — displays all products with image, name, price, stock badge
-- **Item modal** — click item to open modal with +/- quantity selector, realtime price calculation
-- **Cart side panel** — shows selected items, quantities, subtotals, remove button
-- **Order summary modal** — review order, input Facebook name + character name, warning message, confirm button
-- **Order history tab** — customer searches by Facebook name to view past orders and status
-- **Stock protection** — customers cannot order more than available stock, uses Firestore transactions to prevent race conditions
-
-### Admin (admin.html)
-
-- **Password protected** — modal prompt on page load (password is set in `js/admin.js` via `ADMIN_PASSWORD` constant)
-- **Order Board tab** — view all orders (Facebook, character name, items, total, status), change status (pending/completed/cancelled)
-- **Product Management tab** — add/edit/delete products via modals
-- **Stock system** — "+" button to add stock with person's name logged, eye icon to view stock addition history (who added how much and when)
-- **Inline validation** — red error text under input fields instead of alert popups
-
-## Firestore Collections
-
-### `items`
-```
-{
-  name: string,          // item name
-  price: number,         // price per unit (baht)
-  stock: number,         // current stock quantity
-  image: string,         // path to image (e.g. "assets/item1.png")
-  createdAt: timestamp
-}
-```
-
-### `items/{id}/stockHistory` (subcollection)
-```
-{
-  qty: number,           // quantity added
-  addedBy: string,       // name of person who added stock
-  createdAt: timestamp
-}
-```
-
-### `orders`
-```
-{
-  facebook: string,      // customer's Facebook name
-  characterName: string, // in-game character name
-  items: [{              // ordered items array
-    itemId, name, price, qty, subtotal
-  }],
-  totalPrice: number,
-  status: string,        // "pending" | "completed" | "cancelled"
-  createdAt: timestamp
-}
-```
-
-## Setup (for new developers)
-
-### Prerequisites
-- Node.js installed
-- Firebase CLI: `npm install -g firebase-tools`
-
-### Steps
-
-1. **Clone the repo**
-   ```bash
-   git clone https://github.com/PeerapongMala/talesrunner.git
-   cd talesrunner
-   ```
-
-2. **Firebase login**
-   ```bash
-   firebase login
-   ```
-
-3. **Create Firebase config**
-   - Copy `js/firebase-config.js.example` to `js/firebase-config.js`
-   - Fill in your Firebase project config from Firebase Console
-   - **Do NOT commit `js/firebase-config.js`** — it contains API keys
-   - Edit `.firebaserc` with your project ID
-
-4. **Add item images**
-   - Place images in `assets/` folder
-   - Use English filenames only (e.g. `item1.png`, not Thai)
-
-5. **Local development**
-   ```bash
-   firebase serve --only hosting
-   ```
-   Opens at `http://localhost:5000`
-
-6. **Deploy**
-   ```bash
-   firebase deploy
-   ```
-
-## Important Notes
-
-- **Image filenames must be in English** — Thai filenames break on Firebase Hosting URL encoding
-- **Admin password** is in `js/admin.js` (`ADMIN_PASSWORD` constant) — change it for production
-- **Firestore rules** are currently open (read/write: true) — tighten for production
-- **Stock deduction** uses Firestore transactions to handle concurrent orders safely
+Built in **1 day** (March 28, 2026) including:
+- Full e-commerce flow (browse, cart, checkout, order history)
+- Admin backoffice with real-time updates
+- Security hardening (auth, rules, XSS, race conditions)
+- Multiple rounds of code review and fixes
+- Drag & drop product reordering
+- BAN list management
+- Stock adjustment system with audit log

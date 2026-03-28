@@ -14,3 +14,9 @@ test-order.html
 clear-orders.html
 review-*.md
 REVIEW.md
+TODO-SECURITY.md
+prompt.md
+
+# Images
+*.png
+assets/*.png
