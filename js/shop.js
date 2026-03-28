@@ -1,6 +1,9 @@
 // ============================================
-// PEERAPONG SHOP - Frontend Logic
+// BubbleShop - Frontend Logic
 // ============================================
+
+// Helpers
+function formatPrice(v) { const n = Number(v) || 0; return n % 1 === 0 ? n.toString() : n.toFixed(2); }
 
 // State
 let items = [];
@@ -20,6 +23,7 @@ function loadItems() {
     .onSnapshot((snapshot) => {
       const prevItems = items;
       items = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      items.sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity));
 
       // ตรวจจับ stock ลดลง (มีคนซื้อไป) — toast แจ้งเตือน
       if (prevItems.length > 0) {
@@ -81,7 +85,7 @@ function renderItems() {
         <div class="stock-badge">x${Number(item.stock) || 0}</div>
         <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text fill=%22%23999%22 x=%2250%22 y=%2255%22 text-anchor=%22middle%22 font-size=%2212%22>No Image</text></svg>'">
         <div class="item-name">${escapeHtml(item.name)}</div>
-        <div class="item-price">ชิ้นละ ${Number(item.price) || 0} บาท</div>
+        <div class="item-price">ชิ้นละ ${formatPrice(item.price)} บาท</div>
       </div>
     `;
     })
@@ -302,7 +306,7 @@ function clearFieldErrors() {
 }
 
 // ============ ANTI-SPAM ============
-const ORDER_COOLDOWN_MS = 30 * 1000; // 3 นาที
+const ORDER_COOLDOWN_MS = 30 * 1000; // 30 วินาที
 let blockedNames = [];
 
 async function loadBlocklist() {
@@ -521,6 +525,7 @@ async function searchHistory() {
       .collection("orders")
       .where("facebook", "==", fb)
       .orderBy("createdAt", "desc")
+      .limit(50)
       .get();
 
     if (snapshot.empty) {
@@ -564,7 +569,7 @@ async function searchHistory() {
           <div class="order-card-char">ชื่อตัวละคร: <strong>${escapeHtml(order.characterName || '-')}</strong></div>
           <div class="order-card-items">${itemsText}</div>
           <div class="order-card-footer">
-            <span class="order-card-total">รวม ${Number(order.totalPrice) || 0} บาท</span>
+            <span class="order-card-total">รวม ${formatPrice(order.totalPrice)} บาท</span>
             ${cancelBtn}
           </div>
         </div>

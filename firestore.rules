@@ -2,45 +2,68 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // items - ใครก็อ่านได้ แต่เขียนไม่ได้จาก client
-    // (admin ต้องเข้าผ่านหน้า admin ที่ตรวจ password แล้ว
-    //  ตอนนี้ยังเปิด write เพราะยังไม่มี Firebase Auth)
+    // Admin UIDs
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.uid == 'TUts68ApuzUR5Z6qLunSWvvJSIJ2'
+        || request.auth.uid == 'yh9dSe2xjKPmDFcJFOcnZRex0Zi1'
+      );
+    }
+
+    // ============ ITEMS ============
     match /items/{itemId} {
       allow read: if true;
-      allow write: if true;
+      allow create, delete: if isAdmin();
+      // Admin แก้อะไรก็ได้ | ลูกค้าแก้ได้แค่ stock (ห้ามติดลบ)
+      allow update: if isAdmin()
+                    || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock'])
+                        && request.resource.data.stock >= 0);
 
-      // stockHistory subcollection
       match /stockHistory/{historyId} {
         allow read: if true;
-        allow create: if true;
+        allow create: if isAdmin()
+                      && request.resource.data.qty is number
+                      && request.resource.data.addedBy is string
+                      && request.resource.data.addedBy.size() > 0;
       }
     }
 
-    // orders - สร้างได้ต้องมี field ครบ, อ่านได้, อัพเดทได้
+    // ============ ORDERS ============
     match /orders/{orderId} {
       allow read: if true;
-      allow create: if request.resource.data.keys().hasAll(['facebook', 'characterName', 'items', 'totalPrice', 'status'])
+
+      // ลูกค้าสร้าง order ได้ (ต้องผ่าน validation)
+      allow create: if request.resource.data.keys().hasAll(['facebook', 'characterName', 'items', 'totalPrice', 'status', '_hp'])
+                    && request.resource.data._hp == ''
                     && request.resource.data.facebook is string
-                    && request.resource.data.facebook.size() > 0
+                    && request.resource.data.facebook.size() >= 3
                     && request.resource.data.facebook.size() <= 100
                     && request.resource.data.characterName is string
-                    && request.resource.data.characterName.size() > 0
+                    && request.resource.data.characterName.size() >= 2
                     && request.resource.data.characterName.size() <= 100
                     && request.resource.data.items is list
                     && request.resource.data.items.size() > 0
+                    && request.resource.data.items.size() <= 20
                     && request.resource.data.totalPrice is number
                     && request.resource.data.totalPrice > 0
                     && request.resource.data.status == 'pending';
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledBy'])
-                    && request.resource.data.status in ['pending', 'completed', 'cancelled'];
-      // delete ปิดไว้ — ลบผ่าน Firebase Console เท่านั้น
+
+      // Admin แก้อะไรก็ได้ | ลูกค้าเปลี่ยนได้แค่ pending → cancelled (field อื่นห้ามแก้)
+      allow update: if isAdmin()
+                    || (resource.data.status == 'pending'
+                        && request.resource.data.status == 'cancelled'
+                        && request.resource.data.facebook == resource.data.facebook
+                        && request.resource.data.characterName == resource.data.characterName
+                        && request.resource.data.items == resource.data.items
+                        && request.resource.data.totalPrice == resource.data.totalPrice);
+
       allow delete: if false;
     }
 
-    // settings - อ่านได้อย่างเดียว (เปลี่ยนผ่าน Firebase Console เท่านั้น)
+    // ============ SETTINGS ============
     match /settings/{doc} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isAdmin();
     }
   }
 }

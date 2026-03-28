@@ -138,6 +138,45 @@ body {
   color: #ff69b4;
 }
 
+/* ============ ADMIN HEADER ACTIONS ============ */
+.admin-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-header {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-family: 'Kanit', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  color: #fff;
+  background: rgba(155, 77, 202, 0.3);
+  border: 2px solid rgba(155, 77, 202, 0.6);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-header:hover {
+  background: rgba(155, 77, 202, 0.5);
+  border-color: #ff69b4;
+}
+
+.btn-header-logout {
+  background: rgba(255, 68, 68, 0.15);
+  border-color: rgba(255, 68, 68, 0.5);
+  color: #ff6b6b;
+}
+
+.btn-header-logout:hover {
+  background: rgba(255, 68, 68, 0.4);
+  border-color: #ff4444;
+  color: #fff;
+}
+
 /* ============ MAIN LAYOUT ============ */
 .main-container {
   display: flex;
@@ -663,10 +702,58 @@ body {
   color: #fff;
 }
 
+/* ============ ORDER ACTION BUTTONS ============ */
+.btn-order-action {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-family: 'Kanit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 2px solid;
+  white-space: nowrap;
+}
+
+.btn-order-complete {
+  border-color: #4caf50;
+  color: #4caf50;
+  background: rgba(76, 175, 80, 0.15);
+}
+
+.btn-order-complete:hover {
+  background: rgba(76, 175, 80, 0.4);
+  color: #fff;
+}
+
+.btn-order-cancel {
+  border-color: #ffa500;
+  color: #ffa500;
+  background: rgba(255, 165, 0, 0.15);
+}
+
+.btn-order-cancel:hover {
+  background: rgba(255, 165, 0, 0.4);
+  color: #fff;
+}
+
+.btn-order-ban {
+  border-color: #ff4444;
+  color: #ff4444;
+  background: rgba(255, 68, 68, 0.1);
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+.btn-order-ban:hover {
+  background: rgba(255, 68, 68, 0.4);
+  color: #fff;
+}
+
 .order-status-badge {
-  padding: 4px 12px;
+  padding: 5px 14px;
   border-radius: 15px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -1379,7 +1466,7 @@ body {
 }
 
 .admin-order-actions select {
-  padding: 8px 12px;
+  padding: 6px 12px;
   background: rgba(255, 255, 255, 0.1);
   border: 2px solid rgba(155, 77, 202, 0.5);
   border-radius: 8px;
@@ -1387,6 +1474,7 @@ body {
   font-family: 'Kanit', sans-serif;
   font-size: 13px;
   outline: none;
+  cursor: pointer;
 }
 
 .admin-order-actions select option {
@@ -1427,6 +1515,87 @@ body {
   align-items: center;
   padding: 10px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ============ STOCK +/- BUTTONS ============ */
+.btn-stock-add,
+.btn-stock-reduce {
+  width: 32px;
+  height: 28px;
+  border-radius: 6px;
+  font-family: 'Kanit', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  vertical-align: middle;
+}
+
+.btn-stock-add {
+  background: rgba(76, 175, 80, 0.15);
+  border: 2px solid #4caf50;
+  color: #4caf50;
+}
+
+.btn-stock-add:hover {
+  background: rgba(76, 175, 80, 0.4);
+  color: #fff;
+}
+
+.btn-stock-reduce {
+  background: rgba(255, 68, 68, 0.15);
+  border: 2px solid #ff4444;
+  color: #ff4444;
+}
+
+.btn-stock-reduce:hover {
+  background: rgba(255, 68, 68, 0.4);
+  color: #fff;
+}
+
+/* ============ BAN LIST ============ */
+.ban-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 68, 68, 0.08);
+  border: 1px solid rgba(255, 68, 68, 0.25);
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+.ban-item-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: #ffb6c1;
+}
+
+/* ============ DRAG & DROP REORDER ============ */
+.product-table tbody tr[draggable="true"] {
+  cursor: grab;
+}
+
+.product-table tbody tr[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.product-table tbody tr.dragging {
+  opacity: 0.3;
+}
+
+.product-table tbody tr.drag-over {
+  border-top: 3px solid #ff69b4;
+}
+
+.drag-handle {
+  color: #9b4dca;
+  font-size: 16px;
+  user-select: none;
 }
 
 /* ============ PASSWORD MODAL ============ */

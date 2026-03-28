@@ -120,6 +120,7 @@ function showToast(msg, duration, imgSrc) {
   if (_activeToasts < TOAST_MAX) {
     _showToastNow(data);
   } else {
+    if (_toastQueue.length >= 50) _toastQueue.shift();
     _toastQueue.push(data);
   }
 }
