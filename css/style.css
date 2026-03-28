@@ -1125,6 +1125,51 @@ body {
   margin-bottom: 10px;
 }
 
+/* ============ SHOP HOURS ============ */
+.shop-hours {
+  background: rgba(155, 77, 202, 0.1);
+  border: 1px solid rgba(155, 77, 202, 0.3);
+  border-radius: 12px;
+  padding: 12px 18px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+
+.shop-hours-status {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.shop-hours-status.open {
+  color: #4caf50;
+}
+
+.shop-hours-status.closed {
+  color: #ff6b6b;
+}
+
+.shop-hours-detail {
+  font-size: 13px;
+  color: #c0a0e0;
+}
+
+.shop-hours-sep {
+  margin: 0 8px;
+  opacity: 0.4;
+}
+
+@media (max-width: 600px) {
+  .shop-hours-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .shop-hours-sep {
+    display: none;
+  }
+}
+
 .shop-closed-banner {
   display: none;
   background: rgba(255, 68, 68, 0.15);
@@ -1149,6 +1194,16 @@ body {
 .shop-closed-banner p {
   color: #ffb6c1;
   font-size: 14px;
+}
+
+.closed-fb-link {
+  color: #7eb8ff;
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+.closed-fb-link:hover {
+  color: #fff;
 }
 
 /* ============ ORDER HISTORY ============ */
@@ -1520,9 +1575,11 @@ body {
 /* ============ STOCK +/- BUTTONS ============ */
 .stock-btn-group {
   display: inline-flex;
+  align-items: center;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
   border: 2px solid rgba(155, 77, 202, 0.4);
+  position: relative;
 }
 
 .btn-stock-add,
@@ -1546,6 +1603,7 @@ body {
   background: rgba(76, 175, 80, 0.2);
   color: #4caf50;
   border-right: 1px solid rgba(155, 77, 202, 0.3);
+  border-radius: 6px 0 0 6px;
 }
 
 .btn-stock-add:hover {
@@ -1556,10 +1614,33 @@ body {
 .btn-stock-reduce {
   background: rgba(255, 68, 68, 0.2);
   color: #ff4444;
+  border-radius: 0 6px 6px 0;
 }
 
 .btn-stock-reduce:hover {
   background: rgba(255, 68, 68, 0.5);
+  color: #fff;
+}
+
+.stock-accum-badge {
+  position: absolute;
+  top: -10px;
+  right: -12px;
+  min-width: 28px;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.stock-accum-badge.positive {
+  background: rgba(76, 175, 80, 0.9);
+  color: #fff;
+}
+.stock-accum-badge.negative {
+  background: rgba(255, 68, 68, 0.9);
   color: #fff;
 }
 

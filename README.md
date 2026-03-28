@@ -1,13 +1,21 @@
 # BubbleShop - TalesRunner Item Store
 
 E-commerce web app for selling TalesRunner game items.
-Built from scratch in **1 day** with vanilla HTML/CSS/JS + Firebase (no framework).
+Built from scratch in **~20 hours** with vanilla HTML/CSS/JS + Firebase (no framework).
+
+## Preview
+
+### Customer Shop
+![Shop Page](screenshots/shop.png)
+
+### Admin Backoffice
+![Admin Page](screenshots/admin.png)
 
 ## Live Demo
 
-| Page | URL |
-|------|-----|
-| Shop (customer) | https://telesrunner-peerapong.web.app |
+| Page               | URL                                              |
+| ------------------ | ------------------------------------------------ |
+| Shop (customer)    | https://telesrunner-peerapong.web.app            |
 | Admin (backoffice) | https://telesrunner-peerapong.web.app/admin.html |
 
 ## Tech Stack
@@ -21,14 +29,17 @@ Built from scratch in **1 day** with vanilla HTML/CSS/JS + Firebase (no framewor
 ## Features
 
 ### Customer Shop
+
 - Product grid with real-time stock badges
 - Item modal with quantity selector and live price calculation
 - Cart side panel with subtotals
 - Order checkout with Facebook name + character name validation
 - Order history search by Facebook name
+- Shop open/close hours display (auto-detect by day/time)
 - Anti-spam: honeypot, cooldown, captcha, duplicate order check
 
 ### Admin Backoffice
+
 - Firebase Auth login (multi-admin support)
 - Real-time order board with status management (pending / completed / cancelled)
 - Product CRUD with drag & drop reordering
@@ -63,7 +74,8 @@ firebase.json       # Hosting config
 
 ## Development Timeline
 
-Built in **1 day** (March 28, 2026) including:
+Built in **~20 hours** (March 27, 2026 22:00 — March 28, 2026) including:
+
 - Full e-commerce flow (browse, cart, checkout, order history)
 - Admin backoffice with real-time updates
 - Security hardening (auth, rules, XSS, race conditions)

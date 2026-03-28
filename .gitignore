@@ -20,3 +20,4 @@ prompt.md
 # Images
 *.png
 assets/*.png
+!screenshots/*.png
