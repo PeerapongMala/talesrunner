@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BubbleShop</title>
     <link rel="icon" type="image/png" href="assets/jin-arc-trace.png" />
-    <link rel="stylesheet" href="css/style.css?v=8" />
+    <link rel="stylesheet" href="css/style.css?v=9" />
   </head>
   <body>
     <!-- HEADER -->
@@ -49,8 +49,22 @@
         <!-- SHOP CLOSED BANNER -->
         <div class="shop-closed-banner" id="shopClosedBanner">
           <h2>ร้านปิดอยู่</h2>
-          <p>ขณะนี้ร้านยังไม่เปิดให้บริการ กรุณากลับมาใหม่ภายหลังนะครับ</p>
-          <p style="margin-top: 10px">
+          <p id="closeReasonText" style="color: #ff9800; font-weight: 600"></p>
+          <p>
+            ขณะนี้ร้านยังไม่เปิดให้บริการ
+            กรุณากลับมาใหม่ตามเวลาทำการด้านล่างนะครับ
+          </p>
+
+          <div
+            class="shop-hours-detail"
+            style="margin: 20px 0; justify-content: center"
+          >
+            <span>จ-ศ 20:00 - 01:00</span>
+            <span class="shop-hours-sep" style="margin: 0 15px">|</span>
+            <span>ส-อา 10:00 - 23:59 (อาจปิดถ้าติดธุระ)</span>
+          </div>
+
+          <p style="margin-top: 15px">
             สามารถทักถามเวลาเปิดกับแอดมินได้เลย
             <a
               href="https://www.facebook.com/p.peerapong.2024"
@@ -60,6 +74,28 @@
               >Facebook</a
             >
           </p>
+        </div>
+
+        <!-- SHOP STATS BANNER -->
+        <div
+          class="shop-stats-banner"
+          id="shopStatsBanner"
+          style="
+            text-align: center;
+            padding: 10px;
+            background: rgba(255, 105, 180, 0.1);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #ff69b4;
+          "
+        >
+          <strong style="color: #ff69b4">ยอดออเดอร์สำเร็จทั้งหมด:</strong>
+          <span
+            id="completedOrderCount"
+            style="font-weight: bold; font-size: 1.2em; color: #fff"
+            >0</span
+          >
+          รายการ
         </div>
 
         <!-- SHOP SECTION -->
@@ -79,6 +115,15 @@
             <button class="btn-secondary" id="historySearchBtn">ค้นหา</button>
           </div>
           <div id="historyList"></div>
+          <div style="text-align: center; margin-top: 15px">
+            <button
+              class="btn-secondary"
+              id="loadMoreHistoryBtn"
+              style="display: none; width: auto; padding: 8px 24px"
+            >
+              แสดงเพิ่มเติม
+            </button>
+          </div>
         </div>
       </div>
 
@@ -161,9 +206,106 @@
       <div class="modal">
         <h2>สรุปรายการสั่งซื้อ</h2>
         <div class="summary-list" id="summaryList"></div>
+
+        <!-- Coupon Section -->
+        <div class="form-group" style="margin-top: 15px; margin-bottom: 5px">
+          <div class="coupon-apply-row">
+            <input
+              type="text"
+              id="inputCoupon"
+              placeholder="รหัสส่วนลด (ถ้ามี)"
+              maxlength="20"
+              autocomplete="off"
+              class="coupon-apply-input"
+            />
+            <button
+              id="applyCouponBtn"
+              type="button"
+              class="btn-coupon-apply"
+            >
+              ใช้โค้ด
+            </button>
+            <button
+              id="cancelCouponBtn"
+              type="button"
+              class="btn-coupon-cancel"
+              style="display:none;"
+            >
+              ยกเลิก
+            </button>
+          </div>
+          <p id="couponError" style="margin-top: 5px; font-size: 13px; min-height: 18px;"></p>
+        </div>
+
         <div class="summary-total">
           <span>รวมทั้งหมด</span>
-          <span id="summaryTotalPrice">0 บาท</span>
+          <div style="text-align: right">
+            <div
+              id="summaryOriginalPrice"
+              style="
+                text-decoration: line-through;
+                color: #bbb;
+                font-size: 14px;
+                display: none;
+              "
+            ></div>
+            <span id="summaryTotalPrice">0 บาท</span>
+          </div>
+        </div>
+
+        <!-- Payment Section -->
+        <div class="payment-section" id="paymentSection">
+          <h3>
+            ชำระเงินผ่านพร้อมเพย์
+          </h3>
+          <img
+            id="qrCodeImg"
+            src=""
+            alt="QR Code"
+            style="
+              width: 200px;
+              height: 200px;
+              background: white;
+              padding: 10px;
+              border-radius: 8px;
+              margin: 10px auto;
+              display: block;
+            "
+          />
+          <p
+            style="font-size: 13px; color: #aaa; margin-bottom: 15px"
+            id="qrCodeText"
+          >
+            (กำลังประมวลผล QR Code...)
+          </p>
+
+          <div class="form-group" style="text-align: left">
+            <label for="slipUpload"
+              >อัปโหลดสลิปโอนเงิน <span style="color: #ff69b4">*</span></label
+            >
+            <input
+              type="file"
+              id="slipUpload"
+              accept="image/jpeg,image/png,image/webp"
+              style="padding: 10px 0"
+            />
+            <p class="field-error" id="slipUploadError"></p>
+            <div style="text-align: center">
+              <img
+                id="slipPreview"
+                src=""
+                alt="Slip Preview"
+                style="
+                  max-height: 200px;
+                  max-width: 100%;
+                  display: none;
+                  margin-top: 10px;
+                  border-radius: 8px;
+                  border: 2px solid #333;
+                "
+              />
+            </div>
+          </div>
         </div>
         <div class="form-group">
           <label for="inputFb">Facebook</label>
@@ -204,19 +346,6 @@
             tabindex="-1"
             autocomplete="off"
           />
-        </div>
-        <div class="captcha-box">
-          <label for="inputConfirmText">พิมพ์ตัวเลขที่เห็นเพื่อยืนยัน</label>
-          <div class="captcha-display" id="captchaDisplay"></div>
-          <input
-            type="text"
-            id="inputConfirmText"
-            placeholder="พิมพ์ตัวเลข 4 หลัก"
-            maxlength="4"
-            autocomplete="off"
-            inputmode="numeric"
-          />
-          <p class="field-error" id="inputConfirmTextError"></p>
         </div>
         <label class="confirm-checkbox">
           <input type="checkbox" id="confirmCheckbox" />
@@ -275,7 +404,11 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="js/firebase-config.js?v=5"></script>
     <script src="js/modal-alert.js?v=6"></script>
-    <script src="js/shop.js?v=8"></script>
+    <script src="js/shop-core.js?v=3"></script>
+    <script src="js/shop-reservation.js?v=3"></script>
+    <script src="js/shop-cart.js?v=3"></script>
+    <script src="js/shop-checkout.js?v=3"></script>
+    <script src="js/shop-history.js?v=3"></script>
     <script src="js/no-devtools.js"></script>
   </body>
 </html>

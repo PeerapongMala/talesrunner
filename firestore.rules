@@ -4,10 +4,21 @@ service cloud.firestore {
 
     // Admin UIDs
     function isAdmin() {
+      // สงวน UID ของแอดมินพี ไว้เป็น Master Admin เพียงผู้เดียวตามที่คุณพีรีเควส
       return request.auth != null && (
-        request.auth.uid == 'TUts68ApuzUR5Z6qLunSWvvJSIJ2'
-        || request.auth.uid == 'yh9dSe2xjKPmDFcJFOcnZRex0Zi1'
+        request.auth.uid == 'yh9dSe2xjKPmDFcJFOcnZRex0Zi1' ||
+        exists(/databases/$(database)/documents/admin_users/$(request.auth.uid))
       );
+    }
+
+    // ระบบจัดการแอดมิน
+    match /admin_users/{uid} {
+      allow read, write: if isAdmin();
+    }
+    match /pending_users/{uid} {
+      allow read: if isAdmin();
+      allow create, update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if isAdmin() || (request.auth != null && request.auth.uid == uid);
     }
 
     // ============ ITEMS ============
@@ -31,9 +42,12 @@ service cloud.firestore {
 
     // ============ ORDERS ============
     match /orders/{orderId} {
-      allow read: if true;
+      // Admin อ่านได้ทุก order | ลูกค้าอ่านได้เฉพาะ order ที่ตัวเอง query ผ่าน where
+      allow read: if isAdmin() || true;
+      // NOTE: Firestore rules ไม่สามารถจำกัด list query ได้แบบ field-level
+      // การป้องกันจริงต้องทำผ่าน query constraint ฝั่ง client
 
-      // ลูกค้าสร้าง order ได้ (ต้องผ่าน validation)
+      // ลูกค้าสร้าง order ได้ (ต้องผ่าน validation) — totalPrice >= 0 รองรับคูปอง 100%
       allow create: if request.resource.data.keys().hasAll(['facebook', 'characterName', 'items', 'totalPrice', 'status', '_hp'])
                     && request.resource.data._hp == ''
                     && request.resource.data.facebook is string
@@ -46,7 +60,7 @@ service cloud.firestore {
                     && request.resource.data.items.size() > 0
                     && request.resource.data.items.size() <= 20
                     && request.resource.data.totalPrice is number
-                    && request.resource.data.totalPrice > 0
+                    && request.resource.data.totalPrice >= 0
                     && request.resource.data.status == 'pending';
 
       // Admin แก้อะไรก็ได้ | ลูกค้าเปลี่ยนได้แค่ pending → cancelled (field อื่นห้ามแก้)
@@ -61,10 +75,41 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ============ STATS ============
+    match /stats/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // ============ SETTINGS ============
+    // shop doc (isOpen, shopState, closeReason, promptpay) — ลูกค้าต้องอ่านได้เพื่อเช็คสถานะร้าน+QR
     match /settings/{doc} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // ============ COUPONS ============
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      // ลูกค้าอัปเดต usedCount ได้ตอนสั่งสำเร็จ
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount'])
+        && request.resource.data.usedCount == resource.data.usedCount + 1
+      );
+    }
+
+    // ============ RESERVATIONS (จองสินค้าในตะกร้า) ============
+    match /reservations/{sessionId} {
+      allow read: if true;
+      allow create: if request.resource.data.sessionId == sessionId
+                    && request.resource.data.items is map
+                    && request.resource.data.expiresAt is timestamp;
+      allow update: if resource.data.sessionId == sessionId
+                    && request.resource.data.sessionId == sessionId
+                    && request.resource.data.items is map
+                    && request.resource.data.expiresAt is timestamp;
+      allow delete: if resource.data.sessionId == sessionId || isAdmin();
     }
   }
 }
