@@ -143,6 +143,7 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .btn-header {
@@ -313,6 +314,18 @@ body {
   padding: 2px 8px;
   border-radius: 10px;
   font-size: 11px;
+  font-weight: 600;
+}
+
+.item-card .reserved-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(255, 152, 0, 0.85);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
   font-weight: 600;
 }
 
@@ -577,6 +590,75 @@ body {
   color: #fff;
 }
 
+/* Table action buttons (small, consistent size) */
+.btn-table {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  font-family: 'Kanit', sans-serif;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 2px solid;
+  white-space: nowrap;
+}
+.btn-table.primary {
+  background: rgba(155, 77, 202, 0.3);
+  border-color: #9b4dca;
+  color: #fff;
+}
+.btn-table.primary:hover { background: rgba(155, 77, 202, 0.6); }
+.btn-table.danger {
+  background: rgba(255, 68, 68, 0.3);
+  border-color: #ff4444;
+  color: #ff4444;
+}
+.btn-table.danger:hover { background: rgba(255, 68, 68, 0.5); color: #fff; }
+.btn-table.secondary {
+  background: rgba(155, 77, 202, 0.2);
+  border-color: #9b4dca;
+  color: #ccc;
+}
+.btn-table.secondary:hover { background: rgba(155, 77, 202, 0.4); color: #fff; }
+
+/* Shop State Modal Buttons */
+.shop-state-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.btn-shop-mode {
+  padding: 15px;
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-family: 'Kanit', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.btn-shop-mode span {
+  font-size: 12px;
+  font-weight: normal;
+  color: #ddd;
+}
+.btn-shop-mode.auto {
+  background: linear-gradient(135deg, #6e47b3, #9b4dca);
+}
+.btn-shop-mode.force-open {
+  background: linear-gradient(135deg, #4caf50, #7fdfaa);
+}
+.btn-shop-mode.force-open span { color: #fff; }
+.btn-shop-mode.force-close {
+  background: linear-gradient(135deg, #ff4444, #ff6b6b);
+}
+.btn-shop-mode.force-close span { color: #fff; }
+.btn-shop-mode:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+}
+
 /* ============ TOAST NOTIFICATION ============ */
 .toast-container {
   display: flex;
@@ -811,8 +893,8 @@ body {
   border: 2px solid #9b4dca;
   border-radius: 16px;
   padding: 30px;
-  max-width: 500px;
-  width: 90%;
+  max-width: 560px;
+  width: 92%;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
@@ -974,6 +1056,73 @@ body {
   font-size: 18px;
   font-weight: 700;
   color: #ff69b4;
+}
+
+/* Coupon Apply Row (index modal) */
+.coupon-apply-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.coupon-apply-input {
+  flex: 1;
+  padding: 12px 15px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(155, 77, 202, 0.5);
+  border-radius: 8px;
+  color: #fff;
+  font-family: 'Kanit', sans-serif;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.3s;
+  box-sizing: border-box;
+}
+.coupon-apply-input:focus {
+  border-color: #ff69b4;
+}
+.coupon-apply-input::placeholder {
+  color: #777;
+}
+.btn-coupon-apply,
+.btn-coupon-cancel {
+  min-width: 90px;
+}
+.btn-coupon-apply {
+  padding: 0 20px;
+  background: linear-gradient(135deg, #9b4dca, #6b2fa0);
+  color: #fff;
+  border: 2px solid rgba(155, 77, 202, 0.5);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'Kanit', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.3s;
+}
+.btn-coupon-apply:hover {
+  background: linear-gradient(135deg, #b366e0, #8040c0);
+  border-color: #ff69b4;
+}
+.btn-coupon-apply:active {
+  transform: scale(0.97);
+}
+.btn-coupon-cancel {
+  padding: 0 16px;
+  background: rgba(255,68,68,0.08);
+  color: #ff6b6b;
+  border: 1px solid rgba(255,68,68,0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'Kanit', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.3s;
+}
+.btn-coupon-cancel:hover {
+  background: rgba(255,68,68,0.15);
+  border-color: rgba(255,68,68,0.5);
 }
 
 .form-group {
@@ -1171,6 +1320,29 @@ body {
   opacity: 0.4;
 }
 
+/* ============ PROMO COUNTDOWN ============ */
+.promo-countdown {
+  color: #ffeb3b;
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+/* ============ PAYMENT SECTION ============ */
+.payment-section {
+  margin-top: 20px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.payment-section h3 {
+  margin-top: 0;
+  font-size: 16px;
+  color: #e0b0ff;
+}
+
 @media (max-width: 600px) {
   .shop-hours-detail {
     display: flex;
@@ -1353,6 +1525,7 @@ body {
   display: flex;
   gap: 10px;
   margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 
 .admin-section {
@@ -1398,35 +1571,42 @@ body {
   border-color: #ff69b4;
 }
 
-.product-table {
+.product-table,
+.admin-table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
 .product-table th,
-.product-table td {
+.product-table td,
+.admin-table th,
+.admin-table td {
   padding: 10px 6px;
   text-align: left;
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
   vertical-align: middle;
 }
 
-.product-table tbody tr:nth-child(even) {
+.product-table tbody tr:nth-child(even),
+.admin-table tbody tr:nth-child(even) {
   background: rgba(155, 77, 202, 0.1);
 }
 
-.product-table tbody tr:hover {
+.product-table tbody tr:hover,
+.admin-table tbody tr:hover {
   background: rgba(155, 77, 202, 0.2);
 }
 
-.product-table th {
+.product-table th,
+.admin-table th {
   background: rgba(155, 77, 202, 0.3);
   font-weight: 600;
   font-size: 14px;
 }
 
-.product-table td {
+.product-table td,
+.admin-table td {
   font-size: 14px;
 }
 
@@ -1437,6 +1617,383 @@ body {
   border-radius: 6px;
   display: block;
   margin: 0 auto;
+}
+
+/* ============ Coupon Section ============ */
+.coupon-section-card {
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 24px;
+}
+.coupon-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+.coupon-section-title {
+  margin: 0;
+  font-size: 18px;
+}
+.coupon-section-desc {
+  color: #aaa;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+/* Coupon Cards */
+.coupon-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(155,77,202,0.1);
+  border: 1px solid rgba(155,77,202,0.25);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  transition: opacity 0.2s;
+}
+.coupon-card-off {
+  opacity: 0.45;
+}
+.coupon-card-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.coupon-card-code {
+  font-weight: 700;
+  font-size: 17px;
+  color: #ffeb3b;
+  letter-spacing: 1px;
+}
+.coupon-card-discount {
+  font-size: 14px;
+  color: #ff69b4;
+  font-weight: 600;
+}
+.coupon-card-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.coupon-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+.coupon-badge-off { background: #555; color: #ccc; }
+.coupon-badge-full { background: #f44336; color: #fff; }
+.coupon-badge-new { background: #4CAF50; color: #fff; }
+
+.coupon-card-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.coupon-card-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 12px;
+  color: #aaa;
+}
+.coupon-card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Coupon Modal */
+.coupon-modal {
+  max-width: 480px;
+}
+.coupon-code-input {
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 2px;
+}
+.coupon-form-row {
+  display: flex;
+  gap: 12px;
+}
+.coupon-form-row .form-group {
+  flex: 1;
+}
+.coupon-select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 2px solid rgba(155, 77, 202, 0.5);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 14px;
+  font-family: 'Kanit', sans-serif;
+  outline: none;
+  transition: border-color 0.3s;
+}
+.coupon-select:focus {
+  border-color: #ff69b4;
+}
+.coupon-select option {
+  background: #1a0533;
+}
+.coupon-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #ddd;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(155,77,202,0.2);
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+.coupon-checkbox-label:hover {
+  background: rgba(155,77,202,0.1);
+}
+.coupon-checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #9b4dca;
+}
+
+/* PromptPay Input */
+.pp-current-box {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.pp-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+.pp-save-btn {
+  width: auto;
+  padding: 0 28px;
+  white-space: nowrap;
+  border-radius: 10px;
+}
+.pp-input {
+  flex: 1;
+  padding: 14px 14px;
+  font-size: 16px;
+  letter-spacing: 1.5px;
+  font-weight: 600;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(155, 77, 202, 0.5);
+  color: #fff;
+  font-family: 'Kanit', sans-serif;
+  outline: none;
+  transition: border-color 0.3s;
+  box-sizing: border-box;
+}
+.pp-input:focus {
+  border-color: #ff69b4;
+}
+.pp-input::placeholder {
+  color: #777;
+}
+
+/* ============ Admin Stock Toggles ============ */
+.admin-stock-toggles {
+  background: rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 15px;
+}
+.admin-stock-toggles-title {
+  font-size: 14px;
+  color: #aaa;
+  margin-bottom: 10px;
+}
+.admin-stock-toggle-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.admin-stock-toggle-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 8px 14px;
+}
+.admin-stock-toggle-item.disabled {
+  opacity: 0.5;
+}
+.admin-stock-toggle-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+.toggle-switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  cursor: pointer;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: #555;
+  border-radius: 22px;
+  transition: background 0.3s;
+}
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.3s;
+}
+.toggle-switch input:checked + .toggle-slider {
+  background: #4CAF50;
+}
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(18px);
+}
+.toggle-switch input:disabled + .toggle-slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============ Revenue Summary ============ */
+.revenue-summary {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(155,77,202,0.3);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.revenue-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  font-weight: 600;
+  font-size: 15px;
+}
+.revenue-total {
+  color: #4CAF50;
+  font-size: 17px;
+}
+.revenue-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Owner: card v2 (row style with bar) */
+.revenue-card-v2 {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(155,77,202,0.08);
+  border: 1px solid rgba(155,77,202,0.18);
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+.rev-card-rank {
+  font-size: 18px;
+  min-width: 30px;
+  text-align: center;
+  color: #aaa;
+  font-weight: 700;
+}
+.rev-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.rev-card-name {
+  font-weight: 600;
+  color: #e0b0ff;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.rev-card-bar-wrap {
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.rev-card-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #9b4dca, #ff69b4);
+  border-radius: 3px;
+  min-width: 2px;
+  transition: width 0.5s ease;
+}
+.rev-card-stats {
+  font-size: 11px;
+  color: #aaa;
+}
+.rev-card-amount {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffeb3b;
+  white-space: nowrap;
+}
+
+/* Admin: my revenue card */
+.revenue-my {
+  text-align: center;
+  padding: 20px;
+}
+.revenue-my-label {
+  font-size: 13px;
+  color: #aaa;
+  margin-bottom: 6px;
+}
+.revenue-my-amount {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffeb3b;
+  margin-bottom: 4px;
+}
+.revenue-my-stats {
+  font-size: 13px;
+  color: #e0b0ff;
+  margin-bottom: 10px;
+}
+.revenue-my-bar-wrap {
+  height: 8px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+  max-width: 300px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.revenue-my-pct {
+  font-size: 12px;
+  color: #aaa;
 }
 
 /* Admin - Order Board */

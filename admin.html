@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BubbleShop - Admin</title>
     <link rel="icon" type="image/png" href="assets/jin-arc-trace.png" />
-    <link rel="stylesheet" href="css/style.css?v=8" />
+    <link rel="stylesheet" href="css/style.css?v=9" />
   </head>
   <body>
     <!-- LOGIN MODAL -->
@@ -50,6 +50,7 @@
         <h1>BubbleShop - ADMIN</h1>
         <div class="admin-header-actions">
           <button class="btn-shop-toggle closed" id="shopToggleBtn">กำลังโหลด...</button>
+          <button class="btn-header" id="paymentToggleBtn" style="display:none;">ชำระเงิน: โหลด...</button>
           <a href="index.html" class="btn-header">กลับหน้าร้าน</a>
           <button class="btn-header btn-header-logout" id="logoutBtn">ออกจากระบบ</button>
         </div>
@@ -61,6 +62,8 @@
           <button class="nav-tab active" data-tab="orders">Order Board</button>
           <button class="nav-tab" data-tab="products">จัดการสินค้า</button>
           <button class="nav-tab" data-tab="bans">BAN List</button>
+          <button class="nav-tab" data-tab="coupons">ส่วนลด & รับเงิน</button>
+          <button class="nav-tab" data-tab="admins">บัญชีแอดมิน</button>
         </div>
 
         <!-- ORDER BOARD -->
@@ -71,8 +74,12 @@
             <div class="order-counter completed-counter" id="completedCounter">เสร็จแล้ว: 0</div>
             <div class="order-counter cancelled-counter" id="cancelledCounter">ยกเลิก: 0</div>
           </div>
+          <div id="adminRevenueSummary" style="display:none;"></div>
           <div class="order-board" id="orderBoard">
             <p style="color: #aaa">กำลังโหลด...</p>
+          </div>
+          <div style="text-align:center; margin-top:15px;">
+            <button class="btn-secondary" id="loadMoreOrdersBtn" style="display:none; width:auto; padding:8px 24px;">แสดงเพิ่มเติม</button>
           </div>
         </div>
 
@@ -94,6 +101,11 @@
             >
               + เพิ่มสินค้า
             </button>
+          </div>
+          <div id="adminStockToggles" class="admin-stock-toggles" style="display:none;"></div>
+          <div id="ownerStockActions" style="display:none;justify-content:flex-end;gap:8px;margin-bottom:10px;">
+            <button class="btn-secondary" id="clearStockHistoryBtn" style="width:auto;padding:8px 16px;font-size:12px;color:#ff9800;border-color:#ff9800;" onclick="clearAllStockHistory()">เคลียร์ประวัติ Stock ทั้งหมด</button>
+            <button class="btn-secondary" style="width:auto;padding:8px 16px;font-size:12px;color:#ff4444;border-color:#ff4444;" onclick="resetAllStockToZero()">รีเซ็ต Stock ทั้งหมดเป็น 0</button>
           </div>
           <table class="product-table">
             <thead>
@@ -126,6 +138,79 @@
             <p style="color: #aaa">กำลังโหลด...</p>
           </div>
         </div>
+
+        <!-- COUPONS & SETTINGS -->
+        <div class="admin-section" id="couponsSection">
+          <!-- คูปอง -->
+          <div class="coupon-section-card">
+            <div class="coupon-section-header">
+              <div>
+                <h2 class="coupon-section-title">คูปองส่วนลด</h2>
+                <p class="coupon-section-desc">จัดการโค้ดส่วนลดสำหรับลูกค้า</p>
+              </div>
+              <button class="btn-primary" id="openAddCouponBtn" style="width:auto; padding:10px 20px; white-space:nowrap;">+ สร้างคูปอง</button>
+            </div>
+            <div id="couponListContainer">
+              <p style="text-align:center;color:#aaa;padding:20px;">กำลังโหลด...</p>
+            </div>
+          </div>
+
+          <!-- พร้อมเพย์ -->
+          <div class="coupon-section-card" style="margin-top:24px;">
+            <div class="coupon-section-header">
+              <div>
+                <h2 class="coupon-section-title">บัญชีรับเงิน (PromptPay)</h2>
+                <p class="coupon-section-desc">เบอร์พร้อมเพย์จะถูกสร้างเป็น QR Code ให้ลูกค้าสแกนจ่ายเงินอัตโนมัติ</p>
+              </div>
+            </div>
+            <div class="pp-current-box" id="ppCurrentDisplay"></div>
+            <div class="pp-input-row">
+              <input type="text" id="ppInputSetting" placeholder="เช่น 0834405857" inputmode="numeric" maxlength="13" class="pp-input" />
+              <button class="btn-primary pp-save-btn" id="savePPBtn">บันทึก</button>
+            </div>
+            <p class="field-error" id="ppSettingError"></p>
+          </div>
+        </div>
+
+        <!-- ADMINS MANAGEMENT -->
+        <div class="admin-section" id="adminsSection">
+          <h2 style="margin-bottom: 15px">ตั้งค่าผู้ดูแลระบบ (Admin Roles)</h2>
+          
+          <div style="background: rgba(0,0,0,0.2); padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+            <h3 style="color:#4CAF50; margin-top:0;">แอดมินปัจจุบันในระบบ</h3>
+            <table class="admin-table" style="table-layout: fixed;">
+              <thead>
+                <tr>
+                  <th style="width: 30%;">อีเมล</th>
+                  <th style="width: 20%;">ชื่อ (ระบบ)</th>
+                  <th style="width: 25%;">ชื่อแสดงผล</th>
+                  <th style="width: 25%; text-align: center;">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="currentAdminsList">
+                <tr><td colspan="4" style="text-align:center;color:#aaa;">กำลังโหลด...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="background: rgba(0,0,0,0.2); border: 1px solid #555; padding: 20px; border-radius: 8px;">
+            <h3 style="color:#e0b0ff; margin-top:0;">📥 คำขอเข้าระบบ / คนที่พยายามล็อคอิน</h3>
+            <p style="color:#aaa; font-size:13px; margin-bottom:15px;">เมื่อคุณเอาอีเมลไปสมัครสมาชิกหรือพยายามเข้าสู่ระบบหน้านี้ ชื่อจะมาโผล่ที่นี่ (รอการอนุมัติสิทธิ์แอดมินจากเจ้าของร้าน)</p>
+            <table class="admin-table" style="table-layout: fixed;">
+              <thead>
+                <tr>
+                  <th style="width: 40%;">อีเมล / ชื่อ</th>
+                  <th style="width: 30%;">เวลาที่พยายามเข้า</th>
+                  <th style="width: 30%; text-align: center;">ให้สิทธิ์แอดมิน</th>
+                </tr>
+              </thead>
+              <tbody id="pendingAdminsList">
+                <tr><td colspan="3" style="text-align:center;color:#aaa;">กำลังโหลด...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -157,7 +242,7 @@
     <!-- STOCK HISTORY MODAL -->
     <div class="modal-overlay" id="stockHistoryModal">
       <div class="modal">
-        <h2>ประวัติเพิ่ม Stock</h2>
+        <h2>ประวัติ Stock</h2>
         <p
           id="stockHistoryItemName"
           style="text-align: center; color: #ffb6c1; margin-bottom: 15px"
@@ -278,7 +363,83 @@
       </div>
     </div>
 
+    <!-- ADD COUPON MODAL -->
+    <div class="modal-overlay" id="addCouponModal">
+      <div class="modal coupon-modal">
+        <h2 style="margin-bottom:20px;">สร้างคูปองใหม่</h2>
+
+        <div class="form-group">
+          <label for="cCode">รหัสคูปอง</label>
+          <input type="text" id="cCode" class="coupon-code-input" placeholder="เช่น BUBBLE50" maxlength="30" pattern="[A-Za-z0-9]+" autocomplete="off" />
+          <p class="field-error" id="cCodeError"></p>
+        </div>
+
+        <div class="coupon-form-row">
+          <div class="form-group">
+            <label for="cType">ประเภท</label>
+            <select id="cType" class="coupon-select">
+              <option value="baht">ลดเป็นบาท (฿)</option>
+              <option value="percent">ลดเปอร์เซ็นต์ (%)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="cValue">มูลค่า</label>
+            <input type="number" id="cValue" min="1" placeholder="50" />
+            <p class="field-error" id="cValueError"></p>
+          </div>
+        </div>
+
+        <div class="coupon-form-row">
+          <div class="form-group">
+            <label for="cMinAmount">ขั้นต่ำ (฿)</label>
+            <input type="number" id="cMinAmount" min="0" placeholder="0 = ไม่มี" />
+          </div>
+          <div class="form-group">
+            <label for="cMaxUses">โควต้า (ครั้ง)</label>
+            <input type="number" id="cMaxUses" min="0" placeholder="0 = ไม่อั้น" />
+          </div>
+        </div>
+
+        <label class="coupon-checkbox-label">
+          <input type="checkbox" id="cLimitNew" />
+          <span>เฉพาะลูกค้าใหม่เท่านั้น</span>
+        </label>
+
+        <div class="modal-buttons" style="margin-top:20px;">
+          <button class="btn-secondary" id="cancelAddCouponBtn">ยกเลิก</button>
+          <button class="btn-primary" id="confirmAddCouponBtn">สร้างคูปอง</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ALERT / CONFIRM MODAL -->
+    <div class="modal-overlay" id="closeReasonModal">
+      <div class="modal" style="max-width: 420px">
+        <h2>ปิดร้าน</h2>
+        <p style="text-align:center;margin:10px 0;color:#aaa;">ระบุเหตุผลที่ปิดร้าน (เว้นว่างได้)</p>
+        <input type="text" id="closeReasonInput" placeholder="เช่น พักผ่อน, ติดธุระ..." maxlength="200" style="width:100%;padding:10px;border-radius:8px;border:1px solid #555;background:#1a1a2e;color:#fff;font-size:15px;box-sizing:border-box;">
+        <div class="modal-buttons" style="margin-top:15px;">
+          <button class="btn-secondary" id="closeReasonCancel">ยกเลิก</button>
+          <button class="btn-danger" id="closeReasonConfirm">ปิดร้าน</button>
+        </div>
+      </div>
+    </div>
+    <!-- SHOP STATE MODAL -->
+    <div class="modal-overlay" id="shopStateModal">
+      <div class="modal" style="max-width: 480px; text-align: center;">
+        <h2>ตั้งค่าสถานะร้าน</h2>
+        <p style="color: #aaa; font-size: 14px; margin-bottom: 20px;">เลือกระบบการเปิดปิดร้านที่ต้องการ</p>
+        
+        <div class="shop-state-buttons">
+          <button class="btn-shop-mode auto" id="btnModeAuto">🕒 โหมด Auto<br><span>(ระบบเปิดปิดตามตารางเวลาอัตโนมัติ)</span></button>
+          <button class="btn-shop-mode force-open" id="btnModeForceOpen">🟢 บังคับเปิดร้าน<br><span>(เปิดรับออเดอร์ตลอด 24 ชม. ไม่ปิด)</span></button>
+          <button class="btn-shop-mode force-close" id="btnModeForceClose">🔴 บังคับปิดร้าน<br><span>(ปิดร้านทันที พร้อมเขียนแจ้งเหตุผลลูกค้า)</span></button>
+        </div>
+
+        <button class="btn-secondary" id="shopStateCancelBtn" style="width: 100%;">ยกเลิก</button>
+      </div>
+    </div>
+
     <div class="modal-overlay" id="alertModal">
       <div class="modal" style="max-width: 400px">
         <h2 id="alertModalTitle">แจ้งเตือน</h2>
@@ -290,12 +451,58 @@
       </div>
     </div>
 
+    <!-- DELIVER MODAL -->
+    <div class="modal-overlay" id="deliverModal">
+      <div class="modal">
+        <h2>ส่งของ</h2>
+        <div id="deliverOrderInfo" style="margin-bottom:12px;"></div>
+        <div id="deliverItemsList"></div>
+        <div class="modal-buttons">
+          <button class="btn-secondary" id="cancelDeliverBtn">ยกเลิก</button>
+          <button class="btn-primary" id="confirmDeliverBtn">ยืนยันส่งของ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- EDIT DISPLAY NAME MODAL -->
+    <div class="modal-overlay" id="editDisplayNameModal">
+      <div class="modal" style="max-width: 400px;">
+        <h2 id="editDisplayNameTitle">ตั้งชื่อแสดงผล</h2>
+        <p id="editDisplayNameDesc" style="text-align:center;color:#aaa;margin-bottom:15px;font-size:13px;"></p>
+        <div class="form-group">
+          <label for="editDisplayNameInput">ชื่อแสดงผล</label>
+          <input type="text" id="editDisplayNameInput" placeholder="เช่น พี, เลย์, หยวน" maxlength="50" />
+          <p class="field-error" id="editDisplayNameError"></p>
+        </div>
+        <div class="modal-buttons">
+          <button class="btn-secondary" id="cancelDisplayNameBtn">ยกเลิก</button>
+          <button class="btn-primary" id="confirmDisplayNameBtn">บันทึก</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIP MODAL -->
+    <div class="modal-overlay" id="slipModal">
+      <div class="modal" style="text-align:center;">
+        <h2>สลิปโอนเงิน</h2>
+        <img id="slipModalImg" src="" alt="Slip" style="max-width:100%; max-height: 70vh; margin:10px auto; border-radius:8px; display:block;" />
+        <div class="modal-buttons" style="justify-content:center; margin-top:20px;">
+          <button class="btn-secondary" id="closeSlipModalBtn">ปิดหน้าต่าง</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer" style="position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:flex-end;"></div>
+
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="js/firebase-config.js?v=5"></script>
     <script src="js/modal-alert.js?v=5"></script>
-    <script src="js/admin.js?v=9"></script>
+    <script src="js/admin-core.js?v=4"></script>
+    <script src="js/admin-orders.js?v=4"></script>
+    <script src="js/admin-products.js?v=4"></script>
+    <script src="js/admin-settings.js?v=4"></script>
   </body>
 </html>
