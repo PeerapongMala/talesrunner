@@ -44,6 +44,7 @@ let currentQty = 1;
 let shopOpen = true;
 let paymentEnabled = true;
 let customerPayMode = 'pay'; // 'pay' = โอนเลย, 'order' = สั่งก่อน
+let customerSlipAttach = true; // แนบสลิปหรือไม่
 
 // Payment & Coupon State
 let currentPromptPay = "0834405857"; // เปลี่ยนเบอร์พร้อมเพย์รับเงินตรงนี้
@@ -321,6 +322,17 @@ document.addEventListener("DOMContentLoaded", () => {
       currentQty++;
       updateQtyDisplay(maxQty);
     }
+  });
+
+  document.getElementById("qtyDisplay").addEventListener("input", () => {
+    if (!currentItem) return;
+    const inCart = cart[currentItem.id] ? cart[currentItem.id].qty : 0;
+    const maxQty = currentItem.stock - inCart;
+    let val = parseInt(document.getElementById("qtyDisplay").value) || 1;
+    if (val < 1) val = 1;
+    if (val > maxQty) val = maxQty;
+    currentQty = val;
+    updateQtyDisplay(maxQty);
   });
 
   document.getElementById("modalConfirm").addEventListener("click", addToCart);
@@ -647,6 +659,23 @@ function setupPaymentModeToggle() {
 
   btnPay.addEventListener("click", () => setMode("pay"));
   btnOrder.addEventListener("click", () => setMode("order"));
+
+  // Slip toggle
+  const btnSlipOn = document.getElementById("btnSlipOn");
+  const btnSlipOff = document.getElementById("btnSlipOff");
+  const slipWrap = document.getElementById("slipUploadWrap");
+  const slipSkipMsg = document.getElementById("slipSkipMsg");
+  if (btnSlipOn && btnSlipOff && slipWrap) {
+    function setSlip(show) {
+      customerSlipAttach = show;
+      btnSlipOn.classList.toggle("active", show);
+      btnSlipOff.classList.toggle("active", !show);
+      slipWrap.style.display = show ? "" : "none";
+      if (slipSkipMsg) slipSkipMsg.style.display = show ? "none" : "";
+    }
+    btnSlipOn.addEventListener("click", () => setSlip(true));
+    btnSlipOff.addEventListener("click", () => setSlip(false));
+  }
 }
 
 function listenShopStatus() {

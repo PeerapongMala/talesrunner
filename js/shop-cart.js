@@ -28,7 +28,9 @@ function openItemModal(itemId) {
 }
 
 function updateQtyDisplay(maxQty) {
-  document.getElementById("qtyDisplay").textContent = currentQty;
+  const qtyInput = document.getElementById("qtyDisplay");
+  qtyInput.value = currentQty;
+  qtyInput.max = maxQty;
   document.getElementById("modalTotalPrice").textContent =
     `${formatPrice(currentQty * getPrice(currentItem))} บาท`;
   document.getElementById("qtyMinus").disabled = currentQty <= 1;

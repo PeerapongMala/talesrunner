@@ -534,7 +534,8 @@ async function toggleAdminStock(adminName, enabling) {
       entries.slice(i, i + 498).forEach(([itemId, qty]) => {
         batch.set(db.collection('items').doc(itemId), {
           stock: firebase.firestore.FieldValue.increment(qty),
-          adminStock: { [adminName]: firebase.firestore.FieldValue.increment(qty) }
+          adminStock: { [adminName]: firebase.firestore.FieldValue.increment(qty) },
+          _adminAdjust: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
       });
       if (i === 0) {
@@ -590,7 +591,8 @@ async function toggleAdminStock(adminName, enabling) {
       entries.slice(i, i + 498).forEach(([itemId, { qty, key }]) => {
         batch.set(db.collection('items').doc(itemId), {
           stock: firebase.firestore.FieldValue.increment(-qty),
-          adminStock: { [key]: firebase.firestore.FieldValue.increment(-qty) }
+          adminStock: { [key]: firebase.firestore.FieldValue.increment(-qty) },
+          _adminAdjust: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
       });
       if (i === 0) {

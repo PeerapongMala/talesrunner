@@ -317,8 +317,8 @@ function updateRevenueSummary(orderDocs) {
     });
   });
 
-  // หัก com 5% จากแอดมินที่ไม่ใช่ owner
-  const COM_RATE = 0.05;
+  // หัก com 3% จากแอดมินที่ไม่ใช่ owner
+  const COM_RATE = 0.03;
   const adminRevenueNet = {};
   const adminComAmount = {};
   for (const [name, rev] of Object.entries(adminRevenue)) {
@@ -354,7 +354,7 @@ function updateRevenueSummary(orderDocs) {
             <button class="btn-secondary" style="padding:4px 10px;font-size:11px;width:auto;color:#ff9800;border-color:#ff9800;" onclick="resetRevenueSummary()">รีเซ็ต</button>
           </span>
         </div>
-        ${totalCom > 0 ? `<div style="text-align:right;font-size:12px;color:#4CAF50;margin:-4px 0 8px;">รายได้ค่า com 5%: +${formatPrice(Math.round(totalCom))} ฿</div>` : ''}
+        ${totalCom > 0 ? `<div style="text-align:right;font-size:12px;color:#4CAF50;margin:-4px 0 8px;">รายได้ค่า com 3%: +${formatPrice(Math.round(totalCom))} ฿</div>` : ''}
         ${sorted.length > 0 ? `<div class="revenue-cards">
           ${sorted.map(([name, netRev], i) => {
             const grossRev = adminRevenue[name] || 0;

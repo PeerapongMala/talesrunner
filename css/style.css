@@ -966,8 +966,20 @@ body {
 .qty-display {
   font-size: 28px;
   font-weight: 700;
-  min-width: 50px;
+  width: 60px;
   text-align: center;
+  background: transparent;
+  border: 1px solid rgba(155, 77, 202, 0.4);
+  border-radius: 8px;
+  color: #fff;
+  font-family: 'Kanit', sans-serif;
+  padding: 2px 4px;
+  -moz-appearance: textfield;
+}
+.qty-display::-webkit-outer-spin-button,
+.qty-display::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .modal-total-price {
@@ -1356,6 +1368,14 @@ body {
 .payment-toggle-btn:hover:not(.active) {
   background: rgba(155, 77, 202, 0.15);
   color: #ccc;
+}
+
+.slip-toggle-wrap {
+  display: inline-flex;
+  gap: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(155, 77, 202, 0.4);
 }
 
 /* ============ PAYMENT SECTION ============ */
