@@ -28,8 +28,7 @@ function loadProducts() {
 
 function processProductSnapshot(snapshot) {
   const tbody = document.getElementById('productTableBody');
-  {
-    if (snapshot.empty) {
+  if (snapshot.empty) {
       allProducts = [];
       tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#aaa;">ยังไม่มีสินค้า</td></tr>';
       return;
@@ -63,7 +62,6 @@ function processProductSnapshot(snapshot) {
     Object.keys(stockAccum).forEach(id => {
       if (stockAccum[id].total !== 0) showStockAccumBadge(id, stockAccum[id].total);
     });
-  }
 }
 
 // ============ HELPER: อ่าน adminStock รองรับทั้ง flat key และ nested path ============
@@ -492,16 +490,19 @@ async function resetAllStockToZero() {
 
 // ============ ADMIN STOCK TOGGLE (เปิด/ปิด stock แอดมิน) ============
 let disabledAdminsCache = {}; // { adminName: { itemId: qty } }
+let unsubAdminStock = null;
 
 function renderAdminStockToggles() {
   const container = document.getElementById('adminStockToggles');
   if (!container) return;
 
+  // ยกเลิก listener เก่าก่อน ป้องกัน duplicate
+  if (unsubAdminStock) { unsubAdminStock(); unsubAdminStock = null; }
+
   // แอดมินทั่วไปเห็นแค่ของตัวเอง / owner เห็นทั้งหมด
   const visibleAdmins = isOwner ? adminNames : [currentAdminName];
 
-  // Listen realtime
-  db.collection('settings').doc('adminStock').onSnapshot(doc => {
+  function processAdminStockDoc(doc) {
     disabledAdminsCache = (doc.exists && doc.data().disabled) ? doc.data().disabled : {};
 
     container.style.display = 'block';
@@ -532,7 +533,20 @@ function renderAdminStockToggles() {
         toggleAdminStock(name, enabling).finally(() => { e.target.disabled = false; });
       });
     });
-  });
+  }
+
+  // Quota saving mode → .get() ครั้งเดียว
+  if (_quotaSaving) {
+    db.collection('settings').doc('adminStock').get()
+      .then(doc => processAdminStockDoc(doc))
+      .catch(() => {});
+    return;
+  }
+
+  unsubAdminStock = db.collection('settings').doc('adminStock').onSnapshot(
+    doc => processAdminStockDoc(doc),
+    e => { if (typeof handleQuotaError === 'function') handleQuotaError(e, 'adminStockToggle'); }
+  );
 }
 
 async function toggleAdminStock(adminName, enabling) {

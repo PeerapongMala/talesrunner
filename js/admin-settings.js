@@ -505,21 +505,26 @@ function listenShopToggle() {
 
   let currentMode = 'auto'; 
   
-  db.collection('settings').doc('shop').onSnapshot((doc) => {
+  function processShopDoc(doc) {
     if (doc.exists) {
       const data = doc.data();
-      if (data.shopState) {
-        currentMode = data.shopState;
-      } else if (data.isOpen === false) {
-        currentMode = 'force_close';
-      } else {
-        currentMode = 'auto';
-      }
+      if (data.shopState) currentMode = data.shopState;
+      else if (data.isOpen === false) currentMode = 'force_close';
+      else currentMode = 'auto';
     } else {
       currentMode = 'auto';
     }
     updateBtn(currentMode);
-  });
+  }
+
+  if (_quotaSaving) {
+    db.collection('settings').doc('shop').get().then(doc => processShopDoc(doc)).catch(() => {});
+  } else {
+    db.collection('settings').doc('shop').onSnapshot(
+      doc => processShopDoc(doc),
+      e => { if (typeof handleQuotaError === 'function') handleQuotaError(e, 'shopToggle'); }
+    );
+  }
   // Auto update text if schedule changes while viewing admin
   setInterval(() => updateBtn(currentMode), 60000);
 
