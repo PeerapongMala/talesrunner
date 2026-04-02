@@ -722,30 +722,35 @@ function setupPaymentModeToggle() {
   }
 }
 
+function processShopSettings(doc) {
+  if (doc.exists) {
+    const data = doc.data();
+    if (data.shopState) currentShopState = data.shopState;
+    else if (data.isOpen === false) currentShopState = "force_close";
+    else currentShopState = "auto";
+    closeReason = data.closeReason || "";
+    if (data.promptpay) currentPromptPay = data.promptpay;
+    paymentEnabled = data.paymentEnabled !== false;
+  } else {
+    currentShopState = "auto";
+    closeReason = "";
+    paymentEnabled = true;
+  }
+  applyShopStatus();
+  applyPaymentStatus();
+}
+
 function listenShopStatus() {
-  db.collection("settings")
-    .doc("shop")
-    .onSnapshot((doc) => {
-      if (doc.exists) {
-        const data = doc.data();
-        if (data.shopState) {
-          currentShopState = data.shopState;
-        } else if (data.isOpen === false) {
-          currentShopState = "force_close";
-        } else {
-          currentShopState = "auto";
-        }
-        closeReason = data.closeReason || "";
-        if (data.promptpay) currentPromptPay = data.promptpay;
-        paymentEnabled = data.paymentEnabled !== false;
-      } else {
-        currentShopState = "auto";
-        closeReason = "";
-        paymentEnabled = true;
-      }
-      applyShopStatus();
-      applyPaymentStatus();
-    });
+  if (_quotaSaving) {
+    db.collection("settings").doc("shop").get()
+      .then(doc => processShopSettings(doc))
+      .catch(() => {});
+  } else {
+    db.collection("settings").doc("shop").onSnapshot(
+      (doc) => processShopSettings(doc),
+      (e) => { if (typeof handleQuotaError === 'function') handleQuotaError(e, 'shopStatus'); }
+    );
+  }
   setInterval(applyShopStatus, 60000);
 }
 

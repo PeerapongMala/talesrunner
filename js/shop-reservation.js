@@ -80,6 +80,13 @@ function _stopHeartbeat() {
 
 // ============ LISTEN RESERVATIONS (real-time) ============
 function loadReservations() {
+  // Quota saving mode → skip real-time, ใช้ข้อมูลเก่า
+  if (typeof _quotaSaving !== 'undefined' && _quotaSaving) {
+    _allReservations = [];
+    if (typeof renderItems === 'function') renderItems();
+    return;
+  }
+
   window.unsubReservations = db.collection('reservations')
     .onSnapshot((snapshot) => {
       const now = Date.now();
@@ -102,6 +109,7 @@ function loadReservations() {
       if (typeof renderCart === 'function') renderCart();
     }, (e) => {
       console.warn('reservation listener:', e.message);
+      if (typeof handleQuotaError === 'function') handleQuotaError(e, 'reservations');
     });
 }
 

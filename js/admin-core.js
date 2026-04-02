@@ -271,6 +271,14 @@ function setupEscapeKey() {
   });
 }
 
+// ============ MANUAL REFRESH (Quota Saving Mode) ============
+function manualRefresh() {
+  showToast('กำลังโหลดข้อมูลใหม่...');
+  if (typeof loadOrders === 'function') loadOrders();
+  if (typeof loadProducts === 'function') loadProducts();
+  if (typeof renderOfflineQueue === 'function') renderOfflineQueue();
+}
+
 // ============ INIT ============
 document.addEventListener('DOMContentLoaded', () => {
   setupLogin();
@@ -468,6 +476,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof unsubBans !== 'undefined' && unsubBans) { unsubBans(); unsubBans = null; }
       if (typeof unsubAdmins !== 'undefined' && unsubAdmins) { unsubAdmins(); unsubAdmins = null; }
       if (typeof unsubPendingAdmins !== 'undefined' && unsubPendingAdmins) { unsubPendingAdmins(); unsubPendingAdmins = null; }
+      if (typeof unsubAdminStock !== 'undefined' && unsubAdminStock) { unsubAdminStock(); unsubAdminStock = null; }
     } else {
       if (currentAdminName) {
         if (!unsubOrders) loadOrders();
