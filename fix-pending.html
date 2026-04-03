@@ -13,25 +13,27 @@
     .btn { padding: 10px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600; }
     .btn-scan { background: #2196f3; color: #fff; }
     .btn-fix { background: #ff9800; color: #fff; }
-    .btn-fix:disabled { background: #555; cursor: not-allowed; }
-    .btn-bar { text-align: center; margin-bottom: 20px; display: flex; gap: 10px; justify-content: center; }
+    .btn-clean { background: #e91e63; color: #fff; }
+    .btn:disabled { background: #555; cursor: not-allowed; }
+    .btn-bar { text-align: center; margin-bottom: 20px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
     th, td { padding: 6px 10px; border-bottom: 1px solid #333; text-align: left; }
     th { background: #16213e; color: #4fc3f7; }
     .bad { color: #ff9800; font-weight: 700; }
     .fixed { color: #4caf50; font-weight: 700; }
-    #log { margin-top: 15px; padding: 10px; background: #0f0f23; border-radius: 8px; font-size: 0.8rem; max-height: 250px; overflow-y: auto; white-space: pre-wrap; color: #aaa; }
+    #log { margin-top: 15px; padding: 10px; background: #0f0f23; border-radius: 8px; font-size: 0.8rem; max-height: 300px; overflow-y: auto; white-space: pre-wrap; color: #aaa; }
   </style>
 </head>
 <body>
   <h1>แก้ stock + adminStock ให้ตรง stockHistory</h1>
-  <p class="subtitle">สแกนทุกสินค้า → คำนวณ stock และ adminStock จาก stockHistory → แก้ให้ตรง</p>
+  <p class="subtitle">ขั้น 1: ล้าง record ขยะ → ขั้น 2: สแกน → ขั้น 3: แก้ไข</p>
 
-  <div id="status">กด "สแกน" เพื่อเริ่ม</div>
+  <div id="status">กด "1. ล้าง record ขยะ" ก่อน แล้วค่อย "2. สแกน"</div>
 
   <div class="btn-bar">
-    <button class="btn btn-scan" id="btnScan" onclick="scan()">สแกนทั้งหมด</button>
-    <button class="btn btn-fix" id="btnFix" onclick="fixAll()" disabled>แก้ไขทั้งหมด</button>
+    <button class="btn btn-clean" id="btnClean" onclick="cleanJunk()">1. ล้าง record ขยะ</button>
+    <button class="btn btn-scan" id="btnScan" onclick="scan()">2. สแกนทั้งหมด</button>
+    <button class="btn btn-fix" id="btnFix" onclick="fixAll()" disabled>3. แก้ไขทั้งหมด</button>
   </div>
 
   <div id="result"></div>
@@ -43,23 +45,25 @@
   <script src="js/firebase-config.js"></script>
   <script>
     let problemItems = [];
-    let aliasMap = {}; // raw → displayName
+    let aliasMap = {};
 
     async function loadAdminAliases() {
       try {
         const snap = await db.collection('admin_users').get();
         snap.docs.forEach(doc => {
           const d = doc.data();
-          const rawName = d.name || (d.email ? d.email.split('@')[0] : doc.id);
+          const rawName = d.name && d.name !== '-' ? d.name : (d.email ? d.email.split('@')[0] : doc.id);
           const display = d.displayName || rawName;
           if (d.email) {
             aliasMap[d.email] = display;
             aliasMap[d.email.split('@')[0]] = display;
           }
-          aliasMap[rawName] = display;
+          if (d.name && d.name !== '-') aliasMap[d.name] = display;
           aliasMap[doc.id] = display;
+          aliasMap[display] = display; // display → display (identity)
         });
-        log('โหลดชื่อแอดมิน: ' + Object.values(aliasMap).filter((v, i, a) => a.indexOf(v) === i).join(', '));
+        const unique = [...new Set(Object.values(aliasMap))];
+        log('แอดมิน: ' + unique.join(', '));
       } catch (e) {
         log('WARNING: โหลด admin_users ไม่ได้: ' + e.message);
       }
@@ -68,6 +72,13 @@
     function resolveName(raw) {
       if (!raw) return 'ไม่ระบุ';
       return aliasMap[raw] || raw;
+    }
+
+    // record ขยะ = addedBy ขึ้นต้นด้วย "ระบบ" หรือ note มีคำว่า "แก้"
+    function isJunkRecord(d) {
+      if (d.addedBy && d.addedBy.startsWith('ระบบ')) return true;
+      if (d.note && (d.note.includes('แก้') || d.note.includes('ปรับ'))) return true;
+      return false;
     }
 
     function log(msg) {
@@ -95,6 +106,61 @@
       }
     }
 
+    // ขั้น 1: ลบ stockHistory record ขยะจากการ fix ครั้งก่อน
+    async function cleanJunk() {
+      if (!await ensureAuth()) return;
+      document.getElementById('btnClean').disabled = true;
+      document.getElementById('log').textContent = '';
+      setStatus('กำลังสแกนหา record ขยะ...');
+
+      try {
+        const itemsSnap = await db.collection('items').get();
+        let totalJunk = 0;
+        let scanned = 0;
+        const junkRefs = [];
+
+        for (const itemDoc of itemsSnap.docs) {
+          const histSnap = await itemDoc.ref.collection('stockHistory').get();
+          histSnap.docs.forEach(h => {
+            if (isJunkRecord(h.data())) {
+              junkRefs.push(h.ref);
+              totalJunk++;
+            }
+          });
+          scanned++;
+          if (scanned % 10 === 0) setStatus(`สแกน ${scanned}/${itemsSnap.size}... พบขยะ ${totalJunk}`);
+        }
+
+        if (totalJunk === 0) {
+          setStatus('ไม่พบ record ขยะ — ข้ามไป "2. สแกน" ได้เลย');
+          log('ไม่พบ record ขยะ');
+          document.getElementById('btnClean').disabled = false;
+          return;
+        }
+
+        if (!confirm(`พบ ${totalJunk} record ขยะ (จากการ fix ครั้งก่อน)\n\nลบทั้งหมด?`)) {
+          document.getElementById('btnClean').disabled = false;
+          return;
+        }
+
+        // ลบ batch ทีละ 500
+        for (let i = 0; i < junkRefs.length; i += 500) {
+          const batch = db.batch();
+          junkRefs.slice(i, i + 500).forEach(ref => batch.delete(ref));
+          await batch.commit();
+          log(`ลบ batch ${Math.floor(i / 500) + 1}: ${Math.min(500, junkRefs.length - i)} records`);
+        }
+
+        setStatus(`<span style="color:#4caf50">ลบ record ขยะ ${totalJunk} รายการแล้ว</span> — กด "2. สแกน" ต่อ`);
+        log(`ลบเสร็จ ${totalJunk} records`);
+      } catch (e) {
+        setStatus('Error: ' + e.message);
+        log('ERROR: ' + e.message);
+      }
+      document.getElementById('btnClean').disabled = false;
+    }
+
+    // ขั้น 2: สแกน
     async function scan() {
       if (!await ensureAuth()) return;
 
@@ -121,37 +187,36 @@
 
           const histSnap = await itemDoc.ref.collection('stockHistory').get();
 
-          // คำนวณ stock และ adminStock ที่ถูกต้องจาก stockHistory (resolve ชื่อ)
+          // คำนวณจาก stockHistory (ข้าม record ขยะ + resolve ชื่อ)
           let correctStock = 0;
           const correctAdminStock = {};
 
           histSnap.docs.forEach(h => {
             const d = h.data();
+            if (isJunkRecord(d)) return; // ข้าม record ขยะ
             const qty = d.qty || 0;
-            const who = resolveName(d.addedBy); // resolve เป็นชื่อแสดงผล
+            const who = resolveName(d.addedBy);
             correctStock += qty;
             correctAdminStock[who] = (correctAdminStock[who] || 0) + qty;
           });
 
-          // resolve ชื่อใน currentAdminStock ด้วย เพื่อเทียบ
-          const resolvedCurrentAdminStock = {};
+          // resolve ชื่อ currentAdminStock
+          const resolvedCurrent = {};
           for (const [key, val] of Object.entries(currentAdminStock)) {
             const resolved = resolveName(key);
-            resolvedCurrentAdminStock[resolved] = (resolvedCurrentAdminStock[resolved] || 0) + (Number(val) || 0);
+            resolvedCurrent[resolved] = (resolvedCurrent[resolved] || 0) + (Number(val) || 0);
           }
 
-          // เช็คว่า stock ตรงมั้ย
           const stockDiff = correctStock - currentStock;
 
-          // เช็คว่า adminStock ตรงมั้ย
           const adminDiffs = {};
           let hasAdminDiff = false;
-          const allAdmins = new Set([...Object.keys(correctAdminStock), ...Object.keys(resolvedCurrentAdminStock)]);
+          const allAdmins = new Set([...Object.keys(correctAdminStock), ...Object.keys(resolvedCurrent)]);
           for (const admin of allAdmins) {
             const correct = correctAdminStock[admin] || 0;
-            const current = resolvedCurrentAdminStock[admin] || 0;
+            const current = resolvedCurrent[admin] || 0;
             if (correct !== current) {
-              adminDiffs[admin] = { current, correct, diff: correct - current };
+              adminDiffs[admin] = { current, correct };
               hasAdminDiff = true;
             }
           }
@@ -170,11 +235,10 @@
               correctAdminStock
             });
 
-            let detail = `stock: ${currentStock} → ${correctStock}`;
+            let detail = stockDiff !== 0 ? `stock: ${currentStock}→${correctStock}` : '';
             if (hasAdminDiff) {
-              detail += ' | adminStock: ' + Object.entries(adminDiffs)
-                .map(([a, d]) => `${a}: ${d.current}→${d.correct}`)
-                .join(', ');
+              const ad = Object.entries(adminDiffs).map(([a, d]) => `${a}: ${d.current}→${d.correct}`).join(', ');
+              detail += (detail ? ' | ' : '') + ad;
             }
             log(`⚠ ${item.name || itemDoc.id}: ${detail}`);
           }
@@ -196,9 +260,9 @@
                   <td>${esc(p.name)}</td>
                   <td class="${p.stockDiff !== 0 ? 'bad' : ''}">${p.currentStock}</td>
                   <td>${p.correctStock}</td>
-                  <td class="bad">${Object.entries(p.adminDiffs).map(([a, d]) =>
+                  <td class="${Object.keys(p.adminDiffs).length ? 'bad' : ''}">${Object.entries(p.adminDiffs).map(([a, d]) =>
                     `${esc(a)}: ${d.current}→${d.correct}`
-                  ).join(', ') || '-'}</td>
+                  ).join(', ') || 'ตรงแล้ว'}</td>
                 </tr>
               `).join('')}
             </table>
@@ -214,9 +278,10 @@
       btnScan.disabled = false;
     }
 
+    // ขั้น 3: แก้ไข
     async function fixAll() {
       if (problemItems.length === 0) return;
-      if (!confirm(`จะแก้ ${problemItems.length} สินค้า — ปรับ stock + adminStock ให้ตรง stockHistory\n\nยืนยัน?`)) return;
+      if (!confirm(`จะแก้ ${problemItems.length} สินค้า — ปรับ stock + adminStock ให้ตรง\n\nยืนยัน?`)) return;
 
       const btnFix = document.getElementById('btnFix');
       btnFix.disabled = true;
@@ -230,13 +295,11 @@
 
           chunk.forEach(p => {
             const itemRef = db.collection('items').doc(p.id);
-            // set stock ตรงๆ + adminStock ทั้ง map ใหม่
-            const updateData = {
+            batch.set(itemRef, {
               stock: p.correctStock,
               adminStock: p.correctAdminStock,
               _fixTool: firebase.firestore.FieldValue.serverTimestamp()
-            };
-            batch.set(itemRef, updateData, { merge: true });
+            }, { merge: true });
           });
 
           await batch.commit();
@@ -245,21 +308,18 @@
           log(`batch ${Math.floor(i / 250) + 1}: แก้ ${chunk.length} สินค้า`);
         }
 
-        // ล้าง disabled data ใน settings/adminStock
+        // ล้าง disabled data
         try {
           await db.collection('settings').doc('adminStock').set({ disabled: {} }, { merge: true });
           log('ล้าง disabled admin data แล้ว');
         } catch (e) {
-          log('WARNING: ล้าง disabled ไม่ได้: ' + e.message);
+          log('WARNING: ' + e.message);
         }
 
-        setStatus(`<span style="color:#4caf50">แก้เสร็จ ${fixed} สินค้า ✓</span> — stock + adminStock ตรง stockHistory แล้ว`);
+        setStatus(`<span style="color:#4caf50">แก้เสร็จ ${fixed} สินค้า</span> — stock + adminStock ตรงแล้ว`);
         log(`เสร็จ! แก้ ${fixed} สินค้า`);
 
-        document.querySelectorAll('.bad').forEach(el => {
-          el.className = 'fixed';
-        });
-
+        document.querySelectorAll('.bad').forEach(el => { el.className = 'fixed'; });
         problemItems = [];
       } catch (e) {
         setStatus('Error: ' + e.message);
