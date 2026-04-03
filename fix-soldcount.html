@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>คำนวณ soldCount — BubbleShop</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 10px; font-size: 1.4rem; }
+    .subtitle { text-align: center; color: #aaa; margin-bottom: 20px; font-size: 0.85rem; }
+    #status { text-align: center; padding: 10px; margin-bottom: 15px; border-radius: 8px; background: #16213e; }
+    .btn { padding: 10px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600; background: #2196f3; color: #fff; }
+    .btn:disabled { background: #555; cursor: not-allowed; }
+    .btn-bar { text-align: center; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+    th, td { padding: 6px 10px; border-bottom: 1px solid #333; text-align: left; }
+    th { background: #16213e; color: #4fc3f7; }
+    #log { margin-top: 15px; padding: 10px; background: #0f0f23; border-radius: 8px; font-size: 0.8rem; max-height: 250px; overflow-y: auto; white-space: pre-wrap; color: #aaa; }
+  </style>
+</head>
+<body>
+  <h1>คำนวณยอดขาย (soldCount)</h1>
+  <p class="subtitle">นับจาก orders ที่ completed → เขียน soldCount ลง items → sort ตามยอดขายในหน้าร้าน</p>
+
+  <div id="status">กด "คำนวณ" เพื่อเริ่ม</div>
+  <div class="btn-bar">
+    <button class="btn" id="btnRun" onclick="run()">คำนวณ + เขียน soldCount</button>
+  </div>
+
+  <div id="result"></div>
+  <div id="log"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script>
+    function log(msg) {
+      const el = document.getElementById('log');
+      el.textContent += msg + '\n';
+      el.scrollTop = el.scrollHeight;
+    }
+    function setStatus(msg) {
+      document.getElementById('status').innerHTML = msg;
+    }
+
+    async function ensureAuth() {
+      if (firebase.auth().currentUser) return true;
+      const email = prompt('Email แอดมิน:');
+      if (!email) return false;
+      const pass = prompt('รหัสผ่าน:');
+      if (!pass) return false;
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, pass);
+        return true;
+      } catch (e) { alert('Login ไม่ได้: ' + e.message); return false; }
+    }
+
+    async function run() {
+      if (!await ensureAuth()) return;
+      const btn = document.getElementById('btnRun');
+      btn.disabled = true;
+      document.getElementById('log').textContent = '';
+      setStatus('กำลังนับยอดขาย...');
+
+      try {
+        // นับจาก completed orders
+        const ordersSnap = await db.collection('orders').where('status', '==', 'completed').get();
+        log(`พบ ${ordersSnap.size} orders ที่ completed`);
+
+        const soldMap = {}; // itemId → totalQty
+
+        ordersSnap.docs.forEach(doc => {
+          const order = doc.data();
+          if (!Array.isArray(order.items)) return;
+          order.items.forEach(item => {
+            if (item.itemId) {
+              soldMap[item.itemId] = (soldMap[item.itemId] || 0) + (item.qty || 0);
+            }
+          });
+        });
+
+        const entries = Object.entries(soldMap).sort((a, b) => b[1] - a[1]);
+        log(`พบ ${entries.length} สินค้าที่มียอดขาย`);
+
+        // โหลดชื่อสินค้า
+        const itemsSnap = await db.collection('items').get();
+        const itemNames = {};
+        itemsSnap.docs.forEach(d => { itemNames[d.id] = d.data().name || d.id; });
+
+        // แสดงตาราง
+        document.getElementById('result').innerHTML = `
+          <table>
+            <tr><th>#</th><th>สินค้า</th><th>ยอดขาย (ชิ้น)</th></tr>
+            ${entries.map(([id, qty], i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td>${esc(itemNames[id] || id)}</td>
+                <td style="font-weight:700;color:#4caf50;">${qty}</td>
+              </tr>
+            `).join('')}
+          </table>
+        `;
+
+        if (!confirm(`จะเขียน soldCount ลง ${entries.length} สินค้า\n\nยืนยัน?`)) {
+          btn.disabled = false;
+          setStatus('ยกเลิก');
+          return;
+        }
+
+        // เขียน soldCount
+        // รวมสินค้าที่ไม่มียอดขายด้วย (set เป็น 0)
+        const allItems = itemsSnap.docs.map(d => d.id);
+        const writeEntries = allItems.map(id => [id, soldMap[id] || 0]);
+
+        for (let i = 0; i < writeEntries.length; i += 500) {
+          const batch = db.batch();
+          writeEntries.slice(i, i + 500).forEach(([id, qty]) => {
+            batch.update(db.collection('items').doc(id), { soldCount: qty });
+          });
+          await batch.commit();
+          log(`batch ${Math.floor(i / 500) + 1}: เขียน ${Math.min(500, writeEntries.length - i)} สินค้า`);
+        }
+
+        setStatus(`<span style="color:#4caf50">เสร็จ! เขียน soldCount ${writeEntries.length} สินค้า</span>`);
+        log('เสร็จ!');
+      } catch (e) {
+        setStatus('Error: ' + e.message);
+        log('ERROR: ' + e.message);
+      }
+      btn.disabled = false;
+    }
+
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>

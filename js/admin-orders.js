@@ -118,7 +118,8 @@ async function confirmDeliver() {
           }
         );
         transaction.set(db.collection('items').doc(di.itemId), {
-          adminStock: { [adminName]: firebase.firestore.FieldValue.increment(-di.qty) }
+          adminStock: { [adminName]: firebase.firestore.FieldValue.increment(-di.qty) },
+          soldCount: firebase.firestore.FieldValue.increment(di.qty)
         }, { merge: true });
       }
 
