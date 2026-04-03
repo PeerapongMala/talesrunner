@@ -90,8 +90,8 @@ function processItemsSnapshot(snapshot) {
     const bAvail = typeof getAvailableStock === "function" ? getAvailableStock(b) : Number(b.stock) || 0;
     const aOut = aAvail <= 0 ? 1 : 0;
     const bOut = bAvail <= 0 ? 1 : 0;
-    if (aOut !== bOut) return aOut - bOut;
-    return (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity);
+    if (aOut !== bOut) return aOut - bOut; // ของหมดอยู่ล่าง
+    return (Number(b.soldCount) || 0) - (Number(a.soldCount) || 0); // ขายดีอยู่บน
   });
 
   if (prevItems.length > 0) {
