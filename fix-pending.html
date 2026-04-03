@@ -27,7 +27,7 @@
 </head>
 <body>
   <h1>แก้ "รอส่ง" ทิพย์</h1>
-  <p class="subtitle">สแกนทุกสินค้า → หา historyTotal ≠ stock → เพิ่ม stockHistory ให้ตรงกับ stock จริง (ลบรอส่งทิพย์)</p>
+  <p class="subtitle">สแกนทุกสินค้า → หา historyTotal ≠ stock → เพิ่ม stock ให้ตรง historyTotal (คืนของที่หายตอนปิด/เปิด)</p>
 
   <div id="status">กด "สแกน" เพื่อเริ่ม</div>
 
@@ -132,7 +132,7 @@
                   <td>${p.actualStock}</td>
                   <td>${p.historyTotal}</td>
                   <td class="pending-bad">${p.pending}</td>
-                  <td>history ${p.pending > 0 ? '' : '+'}${-p.pending} → pending 0</td>
+                  <td>stock ${p.actualStock} → ${p.historyTotal} (${p.pending > 0 ? '+' : ''}${p.pending})</td>
                 </tr>
               `).join('')}
             </table>
@@ -150,7 +150,7 @@
 
     async function fixAll() {
       if (problemItems.length === 0) return;
-      if (!confirm(`จะแก้ ${problemItems.length} สินค้า — เพิ่ม stockHistory record ให้ตรงกับ stock จริง (ไม่แก้ stock)\n\nยืนยัน?`)) return;
+      if (!confirm(`จะแก้ ${problemItems.length} สินค้า — เพิ่ม stock ให้ตรง historyTotal (คืนของที่หาย)\n\nยืนยัน?`)) return;
 
       const btnFix = document.getElementById('btnFix');
       btnFix.disabled = true;
@@ -164,16 +164,13 @@
           const chunk = problemItems.slice(i, i + 250);
 
           chunk.forEach(p => {
-            // เพิ่ม stockHistory record ให้ historyTotal ตรงกับ stock จริง
-            // เช่น history=40, stock=34, pending=6 → เพิ่ม record -6 → historyTotal=34 → pending=0
+            // เพิ่ม stock ให้ตรง historyTotal
+            // เช่น history=40, stock=34, pending=6 → stock +6 → stock=40 → pending=0
             const itemRef = db.collection('items').doc(p.id);
-            const correction = -p.pending;
-            batch.set(itemRef.collection('stockHistory').doc(), {
-              qty: correction,
-              addedBy: 'ระบบ (แก้รอส่งทิพย์)',
-              note: `ปรับ history ให้ตรง stock (pending ${p.pending > 0 ? '+' : ''}${p.pending} → 0)`,
-              createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            batch.set(itemRef, {
+              stock: firebase.firestore.FieldValue.increment(p.pending),
+              _fixPending: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
           });
 
           await batch.commit();
@@ -182,7 +179,7 @@
           log(`batch ${Math.floor(i / 250) + 1}: แก้ ${chunk.length} สินค้า`);
         }
 
-        setStatus(`<span style="color:#4caf50">แก้เสร็จ ${fixed} สินค้า ✓</span> — รอส่งทิพย์ถูกลบแล้ว (stock ไม่เปลี่ยน)`);
+        setStatus(`<span style="color:#4caf50">แก้เสร็จ ${fixed} สินค้า ✓</span> — stock คืนให้ตรง historyTotal แล้ว`);
         log(`เสร็จ! แก้ ${fixed} สินค้า`);
 
         // update table
