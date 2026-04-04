@@ -83,7 +83,11 @@ function loadItems() {
 function processItemsSnapshot(snapshot) {
   const prevItems = items;
   items = snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .map((doc) => {
+      const d = { id: doc.id, ...doc.data() };
+      if ((Number(d.stock) || 0) < 0) d.stock = 0; // safety net: ไม่แสดง stock ติดลบ
+      return d;
+    })
     .filter((item) => item.active !== false);
   items.sort((a, b) => {
     const aAvail = typeof getAvailableStock === "function" ? getAvailableStock(a) : Number(a.stock) || 0;
@@ -555,12 +559,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // History (with debounce)
+  const historyFbInput = document.getElementById("historyFbInput");
+  historyFbInput.value = localStorage.getItem("savedFb") || "";
   document
     .getElementById("historySearchBtn")
     .addEventListener("click", () => searchHistory(false));
-  document
-    .getElementById("historyFbInput")
-    .addEventListener("keypress", (e) => {
+  historyFbInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") searchHistory(false);
     });
 
@@ -585,6 +589,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (loadMoreFeedBtn) {
     loadMoreFeedBtn.addEventListener("click", () => loadFeed(true));
   }
+
+  // Floating cart: update on resize/orientation change
+  window.addEventListener("resize", updateFloatingCart);
 
   // Item grid click delegation (แทน inline onclick)
   document.getElementById("itemGrid").addEventListener("click", (e) => {

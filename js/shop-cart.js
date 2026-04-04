@@ -102,6 +102,7 @@ function renderCart() {
     cartList.innerHTML = '<div class="cart-empty">ยังไม่ได้เลือกสินค้า</div>';
     cartTotal.style.display = "none";
     summaryBtn.disabled = true;
+    updateFloatingCart();
     return;
   }
 
@@ -143,4 +144,22 @@ function renderCart() {
   cartTotal.style.display = "block";
   cartTotalPrice.textContent = formatPrice(total);
   summaryBtn.disabled = false;
+
+  // อัพเดท floating cart badge
+  updateFloatingCart();
+}
+
+function updateFloatingCart() {
+  const badge = document.getElementById("floatingCartBadge");
+  const btn = document.getElementById("floatingCartBtn");
+  if (!badge || !btn) return;
+  const count = Object.keys(cart).length;
+  badge.textContent = count;
+  const isMobile = window.matchMedia("(max-width: 768px)").matches;
+  btn.style.display = count > 0 && isMobile ? "flex" : "none";
+}
+
+function scrollToCart() {
+  const panel = document.getElementById("sidePanel");
+  if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
 }

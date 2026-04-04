@@ -35,6 +35,15 @@ function processProductSnapshot(snapshot) {
     }
 
     allProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    // Safety net: auto-fix stock ติดลบ
+    for (const item of allProducts) {
+      if ((Number(item.stock) || 0) < 0) {
+        db.collection('items').doc(item.id).update({ stock: 0 }).catch(() => {});
+        item.stock = 0;
+      }
+    }
+
     allProducts.sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity));
 
     tbody.innerHTML = allProducts.map((item, index) => {
@@ -621,17 +630,20 @@ async function toggleAdminStock(adminName, enabling) {
     }
     for (const item of productList) {
       const adminStockMap = item.adminStock || {};
-      let qty = 0;
+      let adminQty = 0;
       let matchedKey = adminName;
       for (const alias of aliases) {
         const val = getAdminStockValue(adminStockMap, alias);
         if (val > 0) {
-          qty += val;
+          adminQty += val;
           matchedKey = alias;
         }
       }
-      if (qty > 0) {
-        savedAmounts[item.id] = { qty, key: matchedKey };
+      if (adminQty > 0) {
+        // Cap หักจาก stock จริงไม่ให้ติดลบ (ของอาจถูกขายไปแล้ว)
+        const currentStock = Math.max(0, Number(item.stock) || 0);
+        const deductQty = Math.min(adminQty, currentStock);
+        savedAmounts[item.id] = { deductQty, adminQty, key: matchedKey };
       }
     }
 
@@ -643,26 +655,28 @@ async function toggleAdminStock(adminName, enabling) {
       return;
     }
 
-    // แปลงเป็น { itemId: qty } สำหรับ save + restore
+    // แปลงเป็น { itemId: deductQty } สำหรับ save + restore
     const saveForRestore = {};
     const entries = Object.entries(savedAmounts);
-    entries.forEach(([itemId, { qty }]) => { saveForRestore[itemId] = qty; });
+    entries.forEach(([itemId, { deductQty }]) => { saveForRestore[itemId] = deductQty; });
 
     for (let i = 0; i < entries.length; i += 249) {
       const batch = db.batch();
-      entries.slice(i, i + 249).forEach(([itemId, { qty, key }]) => {
+      entries.slice(i, i + 249).forEach(([itemId, { deductQty, adminQty, key }]) => {
         const itemRef = db.collection('items').doc(itemId);
         batch.set(itemRef, {
-          stock: firebase.firestore.FieldValue.increment(-qty),
-          adminStock: { [key]: firebase.firestore.FieldValue.increment(-qty) },
+          stock: firebase.firestore.FieldValue.increment(-deductQty),
+          adminStock: { [key]: firebase.firestore.FieldValue.increment(-adminQty) },
           _adminAdjust: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-        batch.set(itemRef.collection('stockHistory').doc(), {
-          qty: -qty,
-          addedBy: key,
-          note: 'ปิด stock แอดมิน',
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        if (deductQty > 0) {
+          batch.set(itemRef.collection('stockHistory').doc(), {
+            qty: -deductQty,
+            addedBy: key,
+            note: 'ปิด stock แอดมิน',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
       });
       if (i === 0) {
         batch.set(db.collection('settings').doc('adminStock'), {
