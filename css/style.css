@@ -2389,6 +2389,46 @@ body {
   text-align: center;
 }
 
+/* ============ FLOATING CART BUTTON (mobile) ============ */
+.floating-cart-btn {
+  display: none;
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #9b4dca, #ff69b4);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  z-index: 900;
+  box-shadow: 0 4px 16px rgba(155, 77, 202, 0.6);
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.floating-cart-btn:active {
+  transform: scale(0.92);
+}
+
+.floating-cart-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ff4444;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 22px;
+  height: 22px;
+  line-height: 22px;
+  border-radius: 11px;
+  text-align: center;
+  font-family: 'Kanit', sans-serif;
+}
+
 /* ============ RESPONSIVE ============ */
 @media (max-width: 768px) {
   .right-column {
@@ -2590,6 +2630,17 @@ body {
   .product-table img {
     width: 36px;
     height: 36px;
+  }
+
+  .summary-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .summary-item-right {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 

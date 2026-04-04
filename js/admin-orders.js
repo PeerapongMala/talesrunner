@@ -7,7 +7,7 @@ let unsubCoupons = null; // Listener คูปอง
 let currentDeliverOrderId = null;
 
 // ============ DELIVER ORDER (ส่งของ) ============
-function openDeliverModal(orderId) {
+async function openDeliverModal(orderId) {
   const order = loadedOrdersCache[orderId];
   if (!order) return;
 
@@ -20,18 +20,80 @@ function openDeliverModal(orderId) {
     <div>ตัวละคร: ${escapeHtml(order.characterName)}</div>
   `;
 
+  // ดึง stock + adminStock สดจาก Firestore
+  const stockMap = {};
+  try {
+    const itemIds = [...new Set(items.map(i => i.itemId).filter(Boolean))];
+    const docs = await Promise.all(itemIds.map(id => db.collection('items').doc(id).get()));
+    docs.forEach(doc => {
+      if (doc.exists) {
+        const d = doc.data();
+        stockMap[doc.id] = { stock: Math.max(0, Number(d.stock) || 0), adminStock: d.adminStock || {} };
+      }
+    });
+  } catch (e) {
+    console.warn('ดึง stock ไม่ได้:', e.message);
+  }
+
+  // หา aliases ของ admin ที่ login อยู่ เพื่อหา stock ของตัวเอง
+  const adminName = currentAdminName || '';
+  const myAliases = adminName && typeof getAdminAliases === 'function' ? getAdminAliases(adminName) : [adminName];
+
   document.getElementById('deliverItemsList').innerHTML = items.map((item, i) => {
     const delivered = deliveries
       .filter(d => d.itemId === item.itemId)
       .reduce((sum, d) => sum + d.qty, 0);
     const remaining = item.qty - delivered;
+
+    // สร้างข้อมูล adminStock breakdown + หา stock ของ admin ปัจจุบัน
+    let stockInfo = '';
+    let myStock = remaining; // fallback ถ้าไม่มีข้อมูล
+    const info = stockMap[item.itemId];
+    if (info) {
+      const parts = [];
+      const adminStockMap = info.adminStock;
+      const seen = new Set();
+      let foundMyStock = 0;
+      for (const [key, val] of Object.entries(adminStockMap)) {
+        if (typeof val !== 'number' || val === 0) continue;
+        const display = typeof resolveAdminName === 'function' ? resolveAdminName(key) : key;
+        if (seen.has(display)) continue;
+        seen.add(display);
+        parts.push(`${escapeHtml(display)}: ${val}`);
+        // เช็คว่า key นี้เป็นของ admin ปัจจุบันมั้ย
+        if (myAliases.includes(key) || myAliases.includes(display)) {
+          foundMyStock += val;
+        }
+      }
+      myStock = Math.max(0, Math.min(remaining, foundMyStock));
+      stockInfo = `<div style="font-size:11px;color:#aaa;margin-top:2px;">คลัง ${info.stock}${parts.length ? ' (' + parts.join(', ') + ')' : ''}</div>`;
+    }
+
+    // สร้างข้อมูลใครส่งเท่าไหร่
+    let deliveryDetail = '';
+    if (delivered > 0) {
+      const itemDeliveries = deliveries.filter(d => d.itemId === item.itemId);
+      const byAdmin = {};
+      itemDeliveries.forEach(d => {
+        const name = typeof resolveAdminName === 'function' ? resolveAdminName(d.by) : (d.by || '?');
+        byAdmin[name] = (byAdmin[name] || 0) + d.qty;
+      });
+      const detailParts = Object.entries(byAdmin).map(([name, qty]) => `${escapeHtml(name)}: ${qty}`).join(', ');
+      const uid = `delivDetail_${i}`;
+      deliveryDetail = `<button onclick="document.getElementById('${uid}').style.display=document.getElementById('${uid}').style.display==='none'?'block':'none'" style="background:none;border:none;color:#4fc3f7;cursor:pointer;font-size:11px;padding:0;">&#128065; ใครส่ง?</button><div id="${uid}" style="display:none;font-size:11px;color:#ff9800;margin-top:2px;">${detailParts}</div>`;
+    }
+
     return `
-      <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-        <span style="flex:1;">${escapeHtml(item.name)}</span>
-        <input type="number" min="0" max="${remaining}" value="${remaining}"
-               class="deliver-qty-input" data-index="${i}" data-item-id="${item.itemId}"
-               style="width:60px;text-align:center;" ${remaining <= 0 ? 'disabled value="0"' : ''}>
-        <span style="color:#aaa;font-size:13px;">/ ${item.qty}${delivered > 0 ? ` (ส่งแล้ว ${delivered})` : ''}</span>
+      <div class="form-group" style="margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="flex:1;">${escapeHtml(item.name)}</span>
+          <input type="number" min="0" max="${remaining}" value="${myStock}"
+                 class="deliver-qty-input" data-index="${i}" data-item-id="${item.itemId}"
+                 style="width:60px;text-align:center;" ${remaining <= 0 ? 'disabled value="0"' : ''}>
+          <span style="color:#aaa;font-size:13px;">/ ${item.qty}${delivered > 0 ? ` (ส่งแล้ว ${delivered})` : ''}</span>
+        </div>
+        ${stockInfo}
+        ${deliveryDetail}
       </div>
     `;
   }).join('');

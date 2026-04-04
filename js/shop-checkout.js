@@ -51,8 +51,8 @@ function openSummaryModal() {
   document.getElementById("qrCodeImg").src = `https://promptpay.io/${currentPromptPay}/${total}.png`;
   document.getElementById("qrCodeText").textContent = `โอนเข้าพร้อมเพย์: ${currentPromptPay}`;
 
-  document.getElementById("inputFb").value = "";
-  document.getElementById("inputCharName").value = "";
+  document.getElementById("inputFb").value = localStorage.getItem("savedFb") || "";
+  document.getElementById("inputCharName").value = localStorage.getItem("savedCharName") || "";
   document.getElementById("confirmCheckbox").checked = false;
   document.getElementById("summaryModal").classList.add("active");
 }
@@ -364,8 +364,10 @@ async function submitOrder() {
       }
     });
 
-    // บันทึก cooldown
+    // บันทึก cooldown + จำชื่อสำหรับครั้งหน้า
     localStorage.setItem("lastOrderTime", Date.now().toString());
+    localStorage.setItem("savedFb", fb);
+    localStorage.setItem("savedCharName", charName);
 
     // สำเร็จ — ลบ reservation
     if (typeof deleteReservation === 'function') deleteReservation();

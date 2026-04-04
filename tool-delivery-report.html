@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>รายงานการส่งของ — BubbleShop</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 6px; font-size: 1.4rem; }
+    .subtitle { text-align: center; color: #aaa; margin-bottom: 20px; font-size: 0.85rem; }
+    #status { text-align: center; padding: 10px; margin-bottom: 15px; border-radius: 8px; background: #16213e; }
+    .btn { padding: 10px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600; color: #fff; margin: 0 4px; }
+    .btn-primary { background: #2196f3; }
+    .btn-fix { background: #ff9800; }
+    .btn:disabled { background: #555; cursor: not-allowed; }
+    .btn-bar { text-align: center; margin-bottom: 20px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 15px; justify-content: center; }
+    .tab { padding: 8px 20px; border: none; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 0.9rem; background: #16213e; color: #aaa; }
+    .tab.active { background: #2a2a4a; color: #4fc3f7; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+    th, td { padding: 6px 10px; border-bottom: 1px solid #333; text-align: left; }
+    th { background: #16213e; color: #4fc3f7; position: sticky; top: 0; }
+    td.num { text-align: center; font-weight: 600; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .summary-cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 15px; justify-content: center; }
+    .summary-card { background: #16213e; border-radius: 10px; padding: 14px 20px; min-width: 140px; text-align: center; }
+    .summary-card .label { font-size: 0.75rem; color: #aaa; margin-bottom: 4px; }
+    .summary-card .value { font-size: 1.4rem; font-weight: 700; color: #4caf50; }
+    .summary-card .value.warn { color: #ff9800; }
+    #log { margin-top: 15px; padding: 10px; background: #0f0f23; border-radius: 8px; font-size: 0.8rem; max-height: 200px; overflow-y: auto; white-space: pre-wrap; color: #aaa; }
+    .order-link { color: #4fc3f7; cursor: pointer; text-decoration: underline; }
+    .scrollable { max-height: 70vh; overflow-y: auto; }
+    .old-order { color: #ff9800; }
+  </style>
+</head>
+<body>
+  <h1>รายงานการส่งของ</h1>
+  <p class="subtitle">ดูว่าใครส่งอะไรไปเท่าไหร่ + แก้ order เก่าที่ไม่มีข้อมูล delivery</p>
+
+  <div id="status">กด "โหลดข้อมูล" เพื่อเริ่ม</div>
+  <div class="btn-bar">
+    <button class="btn btn-primary" id="btnLoad" onclick="loadData()">โหลดข้อมูล</button>
+    <button class="btn btn-fix" id="btnFix" onclick="fixOldOrders()" style="display:none;">แก้ order เก่า</button>
+  </div>
+
+  <div class="tabs" id="tabBar" style="display:none;">
+    <button class="tab active" onclick="switchTab('summary')">สรุปรวม</button>
+    <button class="tab" onclick="switchTab('byAdmin')">แยกตามแอดมิน</button>
+    <button class="tab" onclick="switchTab('byOrder')">แยกตาม order</button>
+    <button class="tab" onclick="switchTab('oldOrders')">order เก่า</button>
+  </div>
+
+  <div id="summarySection" class="section active"></div>
+  <div id="byAdminSection" class="section"></div>
+  <div id="byOrderSection" class="section"></div>
+  <div id="oldOrdersSection" class="section"></div>
+  <div id="log"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script>
+    let allOrders = [];
+    let adminAliasMap = {};
+    let oldOrdersWithoutDelivery = [];
+
+    function log(msg) {
+      const el = document.getElementById('log');
+      el.textContent += msg + '\n';
+      el.scrollTop = el.scrollHeight;
+    }
+    function setStatus(msg) { document.getElementById('status').innerHTML = msg; }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    function resolveAdmin(raw) {
+      if (!raw) return 'ไม่ระบุ';
+      return adminAliasMap[raw] || raw;
+    }
+
+    async function ensureAuth() {
+      if (firebase.auth().currentUser) return true;
+      const email = prompt('Email แอดมิน:');
+      if (!email) return false;
+      const pass = prompt('รหัสผ่าน:');
+      if (!pass) return false;
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, pass);
+        return true;
+      } catch (e) { alert('Login ไม่ได้: ' + e.message); return false; }
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab').forEach((t, i) => {
+        const tabs = ['summary', 'byAdmin', 'byOrder', 'oldOrders'];
+        t.classList.toggle('active', tabs[i] === name);
+      });
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.getElementById(name + 'Section').classList.add('active');
+    }
+
+    async function loadData() {
+      if (!await ensureAuth()) return;
+      const btn = document.getElementById('btnLoad');
+      btn.disabled = true;
+      document.getElementById('log').textContent = '';
+      setStatus('กำลังโหลด...');
+
+      try {
+        // โหลด admin aliases
+        const adminSnap = await db.collection('admin_users').get();
+        adminAliasMap = {};
+        adminSnap.docs.forEach(doc => {
+          const d = doc.data();
+          const rawName = d.name || (d.email ? d.email.split('@')[0] : doc.id);
+          const display = d.displayName || rawName;
+          if (d.email) {
+            adminAliasMap[d.email] = display;
+            adminAliasMap[d.email.split('@')[0]] = display;
+          }
+          adminAliasMap[rawName] = display;
+          adminAliasMap[doc.id] = display;
+        });
+        log('โหลด admin aliases แล้ว');
+
+        // โหลด orders ทั้งหมด (completed + pending ที่มี deliveries)
+        const ordersSnap = await db.collection('orders').orderBy('createdAt', 'desc').get();
+        allOrders = ordersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        log(`โหลด ${allOrders.length} orders`);
+
+        // แยก order ที่ completed แต่ไม่มี deliveries
+        oldOrdersWithoutDelivery = allOrders.filter(o =>
+          o.status === 'completed' && (!Array.isArray(o.deliveries) || o.deliveries.length === 0)
+        );
+        log(`order เก่าที่ไม่มีข้อมูล delivery: ${oldOrdersWithoutDelivery.length}`);
+
+        renderAll();
+
+        document.getElementById('tabBar').style.display = 'flex';
+        if (oldOrdersWithoutDelivery.length > 0) {
+          document.getElementById('btnFix').style.display = 'inline-block';
+        }
+        setStatus(`<span style="color:#4caf50">โหลดเสร็จ! ${allOrders.length} orders</span>`);
+      } catch (e) {
+        setStatus('Error: ' + e.message);
+        log('ERROR: ' + e.message);
+      }
+      btn.disabled = false;
+    }
+
+    function renderAll() {
+      renderSummary();
+      renderByAdmin();
+      renderByOrder();
+      renderOldOrders();
+    }
+
+    function getAllDeliveries() {
+      const result = [];
+      allOrders.forEach(order => {
+        if (!Array.isArray(order.deliveries)) return;
+        order.deliveries.forEach(d => {
+          result.push({
+            orderId: order.id,
+            facebook: order.facebook || '-',
+            itemId: d.itemId,
+            itemName: d.name || findItemName(order, d.itemId),
+            qty: d.qty,
+            by: resolveAdmin(d.by),
+            at: d.at ? (d.at.toDate ? d.at.toDate() : new Date(d.at)) : null,
+            orderStatus: order.status
+          });
+        });
+      });
+      return result;
+    }
+
+    function findItemName(order, itemId) {
+      const items = Array.isArray(order.items) ? order.items : [];
+      const found = items.find(i => i.itemId === itemId);
+      return found ? found.name : itemId;
+    }
+
+    function renderSummary() {
+      const deliveries = getAllDeliveries();
+      const totalItems = deliveries.reduce((sum, d) => sum + d.qty, 0);
+      const admins = {};
+      deliveries.forEach(d => {
+        if (!admins[d.by]) admins[d.by] = { qty: 0, orders: new Set() };
+        admins[d.by].qty += d.qty;
+        admins[d.by].orders.add(d.orderId);
+      });
+
+      const completedOrders = allOrders.filter(o => o.status === 'completed').length;
+      const pendingOrders = allOrders.filter(o => o.status === 'pending').length;
+
+      let html = `
+        <div class="summary-cards">
+          <div class="summary-card"><div class="label">ส่งแล้ว (ชิ้น)</div><div class="value">${totalItems}</div></div>
+          <div class="summary-card"><div class="label">Orders สำเร็จ</div><div class="value">${completedOrders}</div></div>
+          <div class="summary-card"><div class="label">Orders รอส่ง</div><div class="value ${pendingOrders > 0 ? 'warn' : ''}">${pendingOrders}</div></div>
+          <div class="summary-card"><div class="label">ไม่มีข้อมูล delivery</div><div class="value ${oldOrdersWithoutDelivery.length > 0 ? 'warn' : ''}">${oldOrdersWithoutDelivery.length}</div></div>
+        </div>
+        <table>
+          <tr><th>แอดมิน</th><th style="text-align:center;">ส่งแล้ว (ชิ้น)</th><th style="text-align:center;">จำนวน orders</th></tr>
+          ${Object.entries(admins).sort((a, b) => b[1].qty - a[1].qty).map(([name, data]) => `
+            <tr><td>${esc(name)}</td><td class="num">${data.qty}</td><td class="num">${data.orders.size}</td></tr>
+          `).join('')}
+        </table>
+      `;
+      document.getElementById('summarySection').innerHTML = html;
+    }
+
+    function renderByAdmin() {
+      const deliveries = getAllDeliveries();
+      const admins = {};
+      deliveries.forEach(d => {
+        if (!admins[d.by]) admins[d.by] = {};
+        if (!admins[d.by][d.itemName]) admins[d.by][d.itemName] = 0;
+        admins[d.by][d.itemName] += d.qty;
+      });
+
+      let html = '';
+      Object.entries(admins).sort((a, b) => a[0].localeCompare(b[0])).forEach(([admin, items]) => {
+        const totalQty = Object.values(items).reduce((s, q) => s + q, 0);
+        html += `<h3 style="margin:15px 0 5px;color:#e0b0ff;">${esc(admin)} <span style="color:#4caf50;font-size:0.85rem;">(${totalQty} ชิ้น)</span></h3>`;
+        html += `<table><tr><th>สินค้า</th><th style="text-align:center;">จำนวน</th></tr>`;
+        html += Object.entries(items).sort((a, b) => b[1] - a[1]).map(([name, qty]) =>
+          `<tr><td>${esc(name)}</td><td class="num">${qty}</td></tr>`
+        ).join('');
+        html += `</table>`;
+      });
+      document.getElementById('byAdminSection').innerHTML = `<div class="scrollable">${html || '<p style="color:#aaa;text-align:center;">ไม่มีข้อมูล</p>'}</div>`;
+    }
+
+    function renderByOrder() {
+      const ordersWithDelivery = allOrders.filter(o => Array.isArray(o.deliveries) && o.deliveries.length > 0);
+      let html = `<div class="scrollable"><table>
+        <tr><th>#</th><th>Facebook</th><th>สถานะ</th><th>รายการส่ง</th><th>วันที่</th></tr>`;
+
+      ordersWithDelivery.forEach((order, i) => {
+        const byAdmin = {};
+        order.deliveries.forEach(d => {
+          const name = resolveAdmin(d.by);
+          if (!byAdmin[name]) byAdmin[name] = [];
+          const itemName = findItemName(order, d.itemId);
+          byAdmin[name].push(`${esc(itemName)} x${d.qty}`);
+        });
+        const deliveryText = Object.entries(byAdmin).map(([admin, items]) =>
+          `<strong>${esc(admin)}</strong>: ${items.join(', ')}`
+        ).join('<br>');
+
+        const date = order.createdAt ? order.createdAt.toDate().toLocaleString('th-TH') : '-';
+        const statusMap = { pending: 'รอส่ง', completed: 'สำเร็จ', cancelled: 'ยกเลิก' };
+        const statusColor = { pending: '#ff9800', completed: '#4caf50', cancelled: '#ff4444' };
+
+        html += `<tr>
+          <td>${i + 1}</td>
+          <td>${esc(order.facebook || '-')}</td>
+          <td style="color:${statusColor[order.status] || '#aaa'}">${statusMap[order.status] || order.status}</td>
+          <td style="font-size:0.8rem;">${deliveryText}</td>
+          <td style="font-size:0.8rem;">${date}</td>
+        </tr>`;
+      });
+
+      html += '</table></div>';
+      document.getElementById('byOrderSection').innerHTML = html;
+    }
+
+    function renderOldOrders() {
+      if (oldOrdersWithoutDelivery.length === 0) {
+        document.getElementById('oldOrdersSection').innerHTML = '<p style="color:#4caf50;text-align:center;padding:20px;">ไม่มี order เก่าที่ต้องแก้</p>';
+        return;
+      }
+
+      let html = `<p style="color:#ff9800;margin-bottom:10px;text-align:center;">
+        order เหล่านี้ completed แล้วแต่ไม่มีข้อมูลว่าใครส่ง<br>
+        กด "แก้ order เก่า" เพื่อสร้าง deliveries จากข้อมูล items (ระบุเป็น "ระบบ")
+      </p>`;
+      html += `<div class="scrollable"><table>
+        <tr><th>#</th><th>Facebook</th><th>ตัวละคร</th><th>สินค้า</th><th>วันที่</th></tr>`;
+
+      oldOrdersWithoutDelivery.forEach((order, i) => {
+        const items = Array.isArray(order.items) ? order.items : [];
+        const itemsText = items.map(it => `${esc(it.name)} x${it.qty}`).join(', ');
+        const date = order.createdAt ? order.createdAt.toDate().toLocaleString('th-TH') : '-';
+        html += `<tr class="old-order">
+          <td>${i + 1}</td>
+          <td>${esc(order.facebook || '-')}</td>
+          <td>${esc(order.characterName || '-')}</td>
+          <td style="font-size:0.8rem;">${itemsText || '-'}</td>
+          <td style="font-size:0.8rem;">${date}</td>
+        </tr>`;
+      });
+
+      html += '</table></div>';
+      document.getElementById('oldOrdersSection').innerHTML = html;
+    }
+
+    async function fixOldOrders() {
+      if (oldOrdersWithoutDelivery.length === 0) {
+        alert('ไม่มี order ที่ต้องแก้');
+        return;
+      }
+
+      const count = oldOrdersWithoutDelivery.length;
+      if (!confirm(`จะสร้าง deliveries ให้ ${count} orders เก่า\n\ndelivery จะถูกบันทึกในชื่อ "ระบบ (แก้ย้อนหลัง)"\n\nยืนยัน?`)) return;
+
+      const btn = document.getElementById('btnFix');
+      btn.disabled = true;
+      setStatus('กำลังแก้ order เก่า...');
+
+      try {
+        let fixed = 0;
+        for (let i = 0; i < oldOrdersWithoutDelivery.length; i += 500) {
+          const batch = db.batch();
+          const chunk = oldOrdersWithoutDelivery.slice(i, i + 500);
+
+          chunk.forEach(order => {
+            const items = Array.isArray(order.items) ? order.items : [];
+            const deliveries = items.map(item => ({
+              itemId: item.itemId,
+              qty: item.qty,
+              by: 'ระบบ (แก้ย้อนหลัง)',
+              at: order.createdAt ? order.createdAt.toDate() : new Date()
+            }));
+            batch.update(db.collection('orders').doc(order.id), { deliveries });
+          });
+
+          await batch.commit();
+          fixed += chunk.length;
+          log(`batch ${Math.floor(i / 500) + 1}: แก้ ${chunk.length} orders`);
+        }
+
+        // reload
+        setStatus(`<span style="color:#4caf50">แก้เสร็จ! ${fixed} orders — กำลังโหลดใหม่...</span>`);
+        log(`แก้ ${fixed} orders สำเร็จ กำลัง reload...`);
+        await loadData();
+      } catch (e) {
+        setStatus('Error: ' + e.message);
+        log('ERROR: ' + e.message);
+      }
+      btn.disabled = false;
+    }
+  </script>
+</body>
+</html>
