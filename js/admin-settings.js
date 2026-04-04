@@ -299,9 +299,16 @@ function processOrderSnapshot(snapshot, board) {
     const deliveries = Array.isArray(order.deliveries) ? order.deliveries : [];
     const itemsText = items.map(i => {
       const delivered = deliveries.filter(d => d.itemId === i.itemId).reduce((s, d) => s + d.qty, 0);
-      const deliverInfo = delivered > 0
-        ? ` <span style="color:${delivered >= i.qty ? '#4caf50' : '#ff9800'};font-size:12px;">(ส่งแล้ว ${delivered}/${i.qty})</span>`
-        : '';
+      let deliverInfo = '';
+      if (delivered > 0) {
+        const byAdmin = {};
+        deliveries.filter(d => d.itemId === i.itemId).forEach(d => {
+          const name = typeof resolveAdminName === 'function' ? resolveAdminName(d.by) : (d.by || '?');
+          byAdmin[name] = (byAdmin[name] || 0) + d.qty;
+        });
+        const whoText = Object.entries(byAdmin).map(([n, q]) => `${escapeHtml(n)}:${q}`).join(', ');
+        deliverInfo = ` <span style="color:${delivered >= i.qty ? '#4caf50' : '#ff9800'};font-size:12px;">(ส่งแล้ว ${delivered}/${i.qty} — ${whoText})</span>`;
+      }
       return `${escapeHtml(i.name)} x${i.qty}${deliverInfo}`;
     }).join('<br>');
     const status = order.status || 'pending';
