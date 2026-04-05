@@ -31,12 +31,18 @@ function openSummaryModal() {
 
   document.getElementById("summaryTotalPrice").textContent = `${formatPrice(total)} บาท`;
   
-  // Reset payment mode กลับ default (สั่งก่อน)
-  customerPayMode = 'order';
+  // Reset payment mode ตาม admin setting
+  if (typeof adminPayMode !== 'undefined' && adminPayMode === 'pay_only') {
+    customerPayMode = 'pay';
+  } else if (typeof adminPayMode !== 'undefined' && adminPayMode === 'order_only') {
+    customerPayMode = 'order';
+  } else {
+    customerPayMode = 'order'; // default
+  }
   const btnPay = document.getElementById("btnPayNow");
   const btnOrder = document.getElementById("btnOrderFirst");
-  if (btnPay) btnPay.classList.remove("active");
-  if (btnOrder) btnOrder.classList.add("active");
+  if (btnPay) btnPay.classList.toggle("active", customerPayMode === 'pay');
+  if (btnOrder) btnOrder.classList.toggle("active", customerPayMode === 'order');
   if (typeof applyPaymentStatus === 'function') applyPaymentStatus();
 
   // Reset coupon & slip

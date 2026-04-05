@@ -44,6 +44,7 @@ let currentQty = 1;
 let shopOpen = true;
 let customerPayMode = 'order'; // 'pay' = โอนเลย, 'order' = สั่งก่อน
 let customerSlipAttach = true; // แนบสลิปหรือไม่
+let adminPayMode = 'both'; // 'both' | 'pay_only' | 'order_only'
 
 // Payment & Coupon State
 let currentPromptPay = "0834405857"; // เปลี่ยนเบอร์พร้อมเพย์รับเงินตรงนี้
@@ -682,9 +683,28 @@ function applyPaymentStatus() {
   const toggleWrap = document.getElementById("paymentToggleWrap");
   if (!paymentSection) return;
 
-  // แสดง toggle เสมอ ให้ลูกค้าเลือกเอง
-  if (toggleWrap) toggleWrap.style.display = "";
+  if (toggleWrap) toggleWrap.style.display = adminPayMode === 'both' ? "" : "none";
   paymentSection.style.display = customerPayMode === 'pay' ? "" : "none";
+}
+
+function applyAdminPayMode() {
+  const btnPay = document.getElementById("btnPayNow");
+  const btnOrder = document.getElementById("btnOrderFirst");
+  const notice = document.getElementById("payModeNotice");
+
+  if (adminPayMode === 'pay_only') {
+    customerPayMode = 'pay';
+    if (btnPay) btnPay.classList.add("active");
+    if (btnOrder) btnOrder.classList.remove("active");
+    if (notice) { notice.textContent = "ช่วงนี้รับเฉพาะโอนเงินผ่านเว็บ"; notice.style.display = ""; }
+  } else if (adminPayMode === 'order_only') {
+    customerPayMode = 'order';
+    if (btnPay) btnPay.classList.remove("active");
+    if (btnOrder) btnOrder.classList.add("active");
+    if (notice) { notice.textContent = "ช่วงนี้รับเฉพาะสั่งก่อนจ่ายทีหลัง"; notice.style.display = ""; }
+  } else {
+    if (notice) notice.style.display = "none";
+  }
 }
 
 function setupPaymentModeToggle() {
@@ -699,8 +719,8 @@ function setupPaymentModeToggle() {
     applyPaymentStatus();
   }
 
-  btnPay.addEventListener("click", () => setMode("pay"));
-  btnOrder.addEventListener("click", () => setMode("order"));
+  btnPay.addEventListener("click", () => { if (adminPayMode === 'both') setMode("pay"); });
+  btnOrder.addEventListener("click", () => { if (adminPayMode === 'both') setMode("order"); });
 
   // Slip toggle
   const btnSlipOn = document.getElementById("btnSlipOn");
@@ -728,11 +748,14 @@ function processShopSettings(doc) {
     else currentShopState = "auto";
     closeReason = data.closeReason || "";
     if (data.promptpay) currentPromptPay = data.promptpay;
+    adminPayMode = data.payMode || 'both';
   } else {
     currentShopState = "auto";
     closeReason = "";
+    adminPayMode = 'both';
   }
   applyShopStatus();
+  applyAdminPayMode();
   applyPaymentStatus();
 }
 

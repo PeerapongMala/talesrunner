@@ -150,6 +150,7 @@ function setupLogin() {
         loadProducts();
         loadBanList();
         listenShopToggle();
+        if (typeof setupPayModeToggle === 'function') setupPayModeToggle();
         if (typeof loadCoupons === 'function') loadCoupons();
         if (typeof loadAdminRoles === 'function') loadAdminRoles();
       } catch (err) {
