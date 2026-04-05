@@ -610,14 +610,6 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (action === "remove") removeFromCart(id);
   });
 
-  // Close modals on overlay click (ยกเว้น summaryModal)
-  document.querySelectorAll(".modal-overlay").forEach((overlay) => {
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay && overlay.id !== "summaryModal") {
-        overlay.classList.remove("active");
-      }
-    });
-  });
 });
 
 // ============ SHOP OPEN/CLOSE ============
