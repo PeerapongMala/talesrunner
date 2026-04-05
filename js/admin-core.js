@@ -457,15 +457,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btn) unbanFacebook(btn.dataset.unban);
   });
 
-  // ปิด modal เมื่อกดพื้นหลัง
-  ['addProductModal', 'addStockModal', 'stockHistoryModal', 'editProductModal', 'addCouponModal', 'shopStateModal', 'closeReasonModal', 'slipModal', 'editDisplayNameModal', 'deliverModal'].forEach(id => {
-    document.getElementById(id).addEventListener('click', (e) => {
-      if (e.target.id === id) {
-        document.getElementById(id).classList.remove('active');
-      }
-    });
-  });
-
   // จัดการการพับจอ (Page Visibility) เพื่อประหยัดโควต้า
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
