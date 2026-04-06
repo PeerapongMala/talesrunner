@@ -734,6 +734,9 @@ function isWithinShopHours() {
 
 let currentShopState = "auto"; // 'auto' | 'force_open' | 'force_close'
 let closeReason = "";
+let _quotaResetAt = 0;
+let _quotaResetHour = 0;
+let _quotaCloseTimer = null;
 
 function applyShopStatus() {
   const inHours = isWithinShopHours();
@@ -754,6 +757,8 @@ function applyShopStatus() {
   const reasonEl = document.getElementById("closeReasonText");
 
   if (shopOpen) {
+    if (_quotaCloseTimer) { clearInterval(_quotaCloseTimer); _quotaCloseTimer = null; }
+    if (typeof restoreQuotaBadgeToOk === 'function') restoreQuotaBadgeToOk();
     banner.classList.remove("active");
     grid.style.opacity = "";
     grid.style.pointerEvents = "";
@@ -761,7 +766,36 @@ function applyShopStatus() {
     if (hoursEl) hoursEl.style.display = "";
     updateShopHours();
   } else {
-    if (currentShopState === "force_close" && closeReason) {
+    // หยุด timer เก่าก่อน
+    if (_quotaCloseTimer) { clearInterval(_quotaCloseTimer); _quotaCloseTimer = null; }
+
+    const isQuotaClose = closeReason === '[QUOTA_CLOSE]' || closeReason.includes('ระบบขัดข้อง');
+    if (isQuotaClose) {
+      // Quota close: เปลี่ยน badge เป็นสีเหลือง + countdown
+      if (typeof switchQuotaBadgeToError === 'function') switchQuotaBadgeToError();
+      // ใช้ quotaResetAt จาก Firestore หรือคำนวณใหม่
+      const resetTarget = _quotaResetAt || (typeof getNextQuotaReset === 'function' ? getNextQuotaReset() : 0);
+      const hr = _quotaResetHour || (typeof getQuotaResetThaiTime === 'function' ? getQuotaResetThaiTime() : 0);
+      const hrText = hr ? `${hr}:00 น.` : '';
+      function updateQuotaCloseReason() {
+        if (!reasonEl) return;
+        const remain = resetTarget - Date.now();
+        if (remain <= 0) {
+          reasonEl.textContent = 'ระบบกำลังกลับมา... ลองรีเฟรชหน้า';
+          reasonEl.style.color = '#76ff03';
+          clearInterval(_quotaCloseTimer);
+        } else {
+          const h = Math.floor(remain / 3600000);
+          const m = Math.floor((remain % 3600000) / 60000);
+          const s = Math.floor((remain % 60000) / 1000).toString().padStart(2, '0');
+          const timeStr = h > 0 ? `${h} ชม. ${m} นาที ${s} วินาที` : `${m} นาที ${s} วินาที`;
+          reasonEl.textContent = `ระบบโควต้าหมด — ร้านจะกลับมาเปิดใน ${timeStr}` + (hrText ? ` (รีเซ็ตทุกวัน ${hrText})` : '');
+          reasonEl.style.color = '#ff9800';
+        }
+      }
+      updateQuotaCloseReason();
+      _quotaCloseTimer = setInterval(updateQuotaCloseReason, 1000);
+    } else if (currentShopState === "force_close" && closeReason) {
       if (reasonEl) reasonEl.textContent = "เหตุผล: " + closeReason;
     } else if (currentShopState === "auto" && !inHours) {
       if (reasonEl) reasonEl.textContent = "นอกเวลาเปิดร้าน";
@@ -846,6 +880,8 @@ function processShopSettings(doc) {
     else if (data.isOpen === false) currentShopState = "force_close";
     else currentShopState = "auto";
     closeReason = data.closeReason || "";
+    _quotaResetAt = data.quotaResetAt || 0;
+    _quotaResetHour = data.quotaResetHour || 0;
     if (data.promptpay) currentPromptPay = data.promptpay;
     adminPayMode = data.payMode || 'both';
   } else {

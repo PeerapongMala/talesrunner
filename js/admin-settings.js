@@ -658,6 +658,13 @@ function listenShopToggle() {
       else currentMode = 'auto';
       // broadcast payMode ให้ setupPayModeToggle
       if (_payModeCallback) _payModeCallback(data.payMode || 'both');
+      // ถ้า quota close → เปลี่ยน badge
+      const reason = data.closeReason || '';
+      if (reason === '[QUOTA_CLOSE]' || reason.includes('ระบบขัดข้อง')) {
+        if (typeof switchQuotaBadgeToError === 'function') switchQuotaBadgeToError();
+      } else if (currentMode !== 'force_close') {
+        if (typeof restoreQuotaBadgeToOk === 'function') restoreQuotaBadgeToOk();
+      }
     } else {
       currentMode = 'auto';
       if (_payModeCallback) _payModeCallback('both');
