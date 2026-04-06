@@ -144,9 +144,56 @@ function isQuotaError(err) {
   return msg.includes('quota') || msg.includes('resource exhausted') || msg.includes('resource-exhausted');
 }
 
+// คำนวณเวลา quota reset ถัดไป (เที่ยงคืน Pacific Time)
+function getNextQuotaReset() {
+  // สร้างเวลาปัจจุบันใน Pacific Time
+  const now = new Date();
+  const ptString = now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
+  const ptNow = new Date(ptString);
+
+  // เที่ยงคืนวันถัดไป Pacific Time
+  const ptMidnight = new Date(ptNow);
+  ptMidnight.setDate(ptMidnight.getDate() + 1);
+  ptMidnight.setHours(0, 0, 0, 0);
+
+  // แปลงกลับเป็น local time: หาผลต่าง
+  const diffMs = ptMidnight.getTime() - ptNow.getTime();
+  return Date.now() + diffMs;
+}
+
+function getQuotaResetThaiTime() {
+  // หาว่าเที่ยงคืน PT ตรงกับกี่โมงไทย
+  const testDate = new Date();
+  testDate.setDate(testDate.getDate() + 1);
+  // สร้างเที่ยงคืน PT
+  const ptStr = testDate.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' });
+  const [m, d, y] = ptStr.split('/');
+  const midnightPT = new Date(`${y}-${m}-${d}T00:00:00`);
+  // แปลงเป็น UTC โดยใช้ offset ของ PT
+  const ptOffset = new Date(midnightPT.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const utcOffset = new Date(midnightPT.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const diffHrs = (utcOffset - ptOffset) / 3600000;
+  // เวลาไทย = UTC+7
+  const thaiHour = (0 - diffHrs + 7 + 24) % 24;
+  return thaiHour;
+}
+
+function formatQuotaCountdown(ms) {
+  if (ms <= 0) return '00:00:00';
+  const h = Math.floor(ms / 3600000).toString().padStart(2, '0');
+  const m = Math.floor((ms % 3600000) / 60000).toString().padStart(2, '0');
+  const s = Math.floor((ms % 60000) / 1000).toString().padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
+let _quotaResetTarget = 0;
+let _quotaCountdownTimer = null;
+
 function showQuotaBanner() {
   if (_quotaBannerShown) return;
   _quotaBannerShown = true;
+  _quotaResetTarget = getNextQuotaReset();
+  const thaiHour = getQuotaResetThaiTime();
 
   let banner = document.getElementById('quotaBanner');
   if (!banner) {
@@ -155,15 +202,35 @@ function showQuotaBanner() {
     banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#ff1744;color:#fff;padding:12px 16px;text-align:center;font-size:14px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.3);';
     banner.innerHTML = `
       ⚠️ Quota saving mode — ปิด real-time อัตโนมัติเพื่อประหยัด quota<br>
+      <span style="font-size:13px;font-weight:400;">
+        Quota กลับมาใน <strong id="quotaCountdown" style="font-variant-numeric:tabular-nums;">--:--:--</strong>
+        <span style="color:#ffcdd2;font-size:11px;">(รีเซ็ตทุกวัน ${thaiHour}:00 น.)</span>
+      </span><br>
       <span style="font-size:12px;font-weight:400;">
-        <button onclick="if(typeof manualRefresh==='function')manualRefresh();" style="background:#fff;color:#ff1744;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-weight:600;margin:0 6px;">🔄 Refresh ข้อมูล</button>
+        <button onclick="if(typeof manualRefresh==='function')manualRefresh();" style="background:#fff;color:#ff1744;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-weight:600;margin:4px 6px 0;">🔄 Refresh ข้อมูล</button>
         แก้ถาวร: อัพเกรดเป็น Blaze plan →
         <a href="https://console.firebase.google.com" target="_blank" style="color:#fff;text-decoration:underline;">Firebase Console</a>
       </span>
-      <button onclick="this.parentElement.remove();_quotaBannerShown=false;" style="position:absolute;right:10px;top:8px;background:none;border:none;color:#fff;font-size:18px;cursor:pointer;">&times;</button>
+      <button onclick="this.parentElement.remove();_quotaBannerShown=false;clearInterval(_quotaCountdownTimer);" style="position:absolute;right:10px;top:8px;background:none;border:none;color:#fff;font-size:18px;cursor:pointer;">&times;</button>
     `;
     document.body.prepend(banner);
   }
+
+  // อัปเดต countdown ทุกวินาที
+  function updateCountdown() {
+    const el = document.getElementById('quotaCountdown');
+    if (!el) { clearInterval(_quotaCountdownTimer); return; }
+    const remain = _quotaResetTarget - Date.now();
+    if (remain <= 0) {
+      el.textContent = 'กำลังรีเซ็ต... ลอง Refresh!';
+      el.style.color = '#76ff03';
+    } else {
+      el.textContent = formatQuotaCountdown(remain);
+    }
+  }
+  updateCountdown();
+  if (_quotaCountdownTimer) clearInterval(_quotaCountdownTimer);
+  _quotaCountdownTimer = setInterval(updateCountdown, 1000);
 }
 
 // ปิด listener ทั้งหมดเพื่อประหยัด quota
