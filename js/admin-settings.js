@@ -394,9 +394,11 @@ function processOrderSnapshot(snapshot, board) {
 
   updateFaviconAndTitle(pending);
 
+  // ตรวจ order ใหม่เฉพาะ pending เท่านั้น (completed/cancelled ไม่ต้อง notify)
+  const pendingDocs = docs.filter(d => (d.data().status || 'pending') === 'pending');
   const newIds = new Set();
   if (!firstLoad) {
-    docs.forEach(doc => {
+    pendingDocs.forEach(doc => {
       if (!knownOrderIds.has(doc.id)) newIds.add(doc.id);
     });
     if (newIds.size > 0) {
