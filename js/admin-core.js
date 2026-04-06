@@ -524,6 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const bq = (allProducts.find(p => p.id === id) || {}).bundleQty || 1;
       currentAdminName ? quickStockAdjust(id, name, -bq) : openAddStockModal(id, name, 'reduce');
     } else if (action === 'stockHistory') openStockHistory(id, name);
+    else if (action === 'toggleShare') toggleShareExternal(id, btn.dataset.shared === 'true');
     else if (action === 'toggleActive') toggleItemActive(id, btn.dataset.active === 'true');
     else if (action === 'edit') openEditProductModal(id, name, Number(price), image);
     else if (action === 'delete') deleteProduct(id);
