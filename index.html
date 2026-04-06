@@ -33,8 +33,18 @@
       <div class="shop-grid-container">
         <div class="nav-tabs">
           <button class="nav-tab active" data-tab="shop">ร้านค้า</button>
-          <button class="nav-tab" data-tab="history">ประวัติการสั่ง</button>
-          <button class="nav-tab" data-tab="feed">ประวัติร้าน</button>
+          <button class="nav-tab" data-tab="history">ประวัติ</button>
+        </div>
+
+        <!-- Category sub-tabs (shop) -->
+        <div class="sub-tabs" id="categoryTabs">
+          <button class="sub-tab active" data-category="all">ทั้งหมด</button>
+        </div>
+
+        <!-- History sub-tabs -->
+        <div class="sub-tabs" id="historySubTabs" style="display:none;">
+          <button class="sub-tab active" data-historytab="orders">ประวัติสั่ง</button>
+          <button class="sub-tab" data-historytab="feed">ประวัติร้าน</button>
         </div>
 
         <!-- SHOP HOURS INFO -->
@@ -92,6 +102,11 @@
         <!-- SHOP SECTION -->
         <div id="shopSection">
           <div class="item-grid" id="itemGrid"></div>
+          <div class="pagination" id="shopPagination" style="display:none;">
+            <button class="pagination-btn" id="prevPageBtn" disabled>&laquo; ก่อนหน้า</button>
+            <span class="pagination-info" id="pageInfo">1 / 1</span>
+            <button class="pagination-btn" id="nextPageBtn">ถัดไป &raquo;</button>
+          </div>
         </div>
 
         <!-- FEED SECTION (ประวัติร้าน) -->

@@ -109,6 +109,15 @@ function renderCart() {
   let total = 0;
   cartList.innerHTML = entries
     .map(([id, { item, qty }]) => {
+      // ซิงค์ข้อมูลล่าสุดจาก items array (ป้องกัน cart cache เก่า)
+      const liveItem = items.find(i => i.id === id);
+      if (liveItem) {
+        item.bundleQty = liveItem.bundleQty;
+        item.stock = liveItem.stock;
+        item.price = liveItem.price;
+        item.promoPrice = liveItem.promoPrice;
+        item.promoExpiresAt = liveItem.promoExpiresAt;
+      }
       const bq = getBundleQty(item);
       const unitPrice = getPrice(item) * bq;
       const subtotal = unitPrice * qty;

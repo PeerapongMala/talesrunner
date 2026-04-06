@@ -1,3 +1,14 @@
+// ============ HELPER: เช็คว่าสินค้าเป็นของ admin คนนี้ ============
+function isMyProduct(item) {
+  if (!currentAdminName) return false;
+  const aliases = typeof getAdminAliases === 'function' ? getAdminAliases(currentAdminName) : [currentAdminName];
+  const adminStockMap = item.adminStock || {};
+  for (const alias of aliases) {
+    if (getAdminStockValue(adminStockMap, alias) > 0) return true;
+  }
+  return false;
+}
+
 // ============ LOAD PRODUCTS (real-time) ============
 function loadProducts() {
   if (unsubProducts) {
@@ -46,7 +57,10 @@ function processProductSnapshot(snapshot) {
 
     allProducts.sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity));
 
-    tbody.innerHTML = allProducts.map((item, index) => {
+    // External admin → แสดงเฉพาะสินค้าที่ตัวเองมี adminStock
+    const visibleProducts = isExternal ? allProducts.filter(item => isMyProduct(item)) : allProducts;
+
+    tbody.innerHTML = visibleProducts.map((item, index) => {
       const isActive = item.active !== false;
       return `
         <tr draggable="true" data-id="${item.id}" style="${!isActive ? 'opacity:0.4;' : ''}">
@@ -799,6 +813,8 @@ async function addProduct() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     if (bundleQty > 1) newItem.bundleQty = bundleQty;
+    const selectedCats = getSelectedCategories('addProductCategories');
+    if (selectedCats.length > 0) newItem.categories = selectedCats;
     if (stock > 0 && addedBy) {
       newItem.adminStock = { [addedBy]: stock };
     }
@@ -835,6 +851,7 @@ function openAddProductModal() {
   document.getElementById('pAddedBy').innerHTML = renderAdminOptions(currentAdminName);
   document.getElementById('addImagePreview').style.display = 'none';
   document.getElementById('addImageUploadText').textContent = 'คลิกเพื่อเลือกรูป';
+  renderCategoryCheckboxes('addProductCategories', []);
   document.getElementById('addProductModal').classList.add('active');
 }
 
@@ -868,6 +885,7 @@ function openEditProductModal(itemId, name, price, currentImage) {
     document.getElementById('editImageUploadText').textContent = 'คลิกเพื่อเลือกรูป';
   }
 
+  renderCategoryCheckboxes('editProductCategories', item ? (item.categories || []) : []);
   document.getElementById('editProductModal').classList.add('active');
 }
 
@@ -899,6 +917,8 @@ async function confirmEditProduct() {
     } else {
       updateData.bundleQty = firebase.firestore.FieldValue.delete();
     }
+    const selectedCats = getSelectedCategories('editProductCategories');
+    updateData.categories = selectedCats;
     if (editImageBase64) {
       updateData.image = editImageBase64;
     }
@@ -1002,6 +1022,293 @@ async function saveSortOrder() {
     await batch.commit();
   } catch (e) {
     showAlert('บันทึกลำดับไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+// ============ CATEGORY MANAGEMENT ============
+let adminCategoriesList = []; // { id, name, order }
+
+async function loadAdminCategories() {
+  try {
+    const doc = await db.collection('settings').doc('categories').get();
+    adminCategoriesList = (doc.exists && Array.isArray(doc.data().list)) ? doc.data().list : [];
+    adminCategoriesList.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  } catch (e) {
+    console.warn('loadAdminCategories:', e.message);
+  }
+}
+
+function openCategoryModal() {
+  renderCategoryList();
+  document.getElementById('newCategoryName').value = '';
+  document.getElementById('categoryModal').classList.add('active');
+}
+
+function closeCategoryModal() {
+  document.getElementById('categoryModal').classList.remove('active');
+}
+
+function renderCategoryList() {
+  const container = document.getElementById('categoryList');
+  if (adminCategoriesList.length === 0) {
+    container.innerHTML = '<p style="text-align:center;color:#aaa;">ยังไม่มีหมวดหมู่</p>';
+    return;
+  }
+  container.innerHTML = adminCategoriesList.map((cat, i) => `
+    <div class="category-list-item" draggable="true" data-cat-index="${i}" data-id="${escapeHtml(cat.id)}">
+      <div style="display:flex;align-items:center;gap:8px;overflow:hidden;">
+        <span class="drag-handle" style="cursor:grab;color:#aaa;">☰</span>
+        <span class="category-list-name">${escapeHtml(cat.name)}</span>
+      </div>
+      <div class="category-list-actions">
+        <button class="btn-icon" data-cat-action="assign" data-cat-index="${i}" title="จัดการสินค้า" style="color:#4fc3f7;font-size:11px;padding:4px 8px;">📦</button>
+        <button class="btn-icon" data-cat-action="rename" data-cat-index="${i}" title="เปลี่ยนชื่อ">✏️</button>
+        <button class="btn-icon btn-icon-danger" data-cat-action="delete" data-cat-index="${i}" title="ลบ">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function saveCategories() {
+  adminCategoriesList.forEach((cat, i) => { cat.order = i; });
+  try {
+    await db.collection('settings').doc('categories').set({ list: adminCategoriesList });
+  } catch (e) {
+    showAlert('บันทึกหมวดหมู่ไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+async function addCategory() {
+  const input = document.getElementById('newCategoryName');
+  const name = input.value.trim();
+  if (!name) return;
+
+  const id = 'cat_' + Date.now();
+  adminCategoriesList.push({ id, name, order: adminCategoriesList.length });
+  await saveCategories();
+  input.value = '';
+  renderCategoryList();
+  showToast('เพิ่มหมวดหมู่ "' + name + '" แล้ว');
+}
+
+let renameCatIndex = null;
+
+function openRenameCategoryModal(index) {
+  const cat = adminCategoriesList[index];
+  if (!cat) return;
+  renameCatIndex = index;
+  document.getElementById('renameCategoryInput').value = cat.name;
+  document.getElementById('categoryModal').classList.remove('active');
+  document.getElementById('renameCategoryModal').classList.add('active');
+  document.getElementById('renameCategoryInput').focus();
+}
+
+function closeRenameCategoryModal() {
+  document.getElementById('renameCategoryModal').classList.remove('active');
+  document.getElementById('categoryModal').classList.add('active');
+  renameCatIndex = null;
+}
+
+async function confirmRenameCategory() {
+  if (renameCatIndex === null) return;
+  const cat = adminCategoriesList[renameCatIndex];
+  if (!cat) return;
+  const newName = document.getElementById('renameCategoryInput').value.trim();
+  if (!newName || newName === cat.name) { closeRenameCategoryModal(); return; }
+  cat.name = newName;
+  await saveCategories();
+  renderCategoryList();
+  showToast('เปลี่ยนชื่อเป็น "' + cat.name + '" แล้ว');
+  closeRenameCategoryModal();
+}
+
+async function deleteCategory(index) {
+  const cat = adminCategoriesList[index];
+  if (!cat) return;
+  const yes = await showConfirm(`ลบหมวดหมู่ "${cat.name}"?\n(สินค้าจะยังอยู่ แต่ไม่อยู่ในหมวดนี้แล้ว)`, 'ยืนยันลบ');
+  if (!yes) return;
+  adminCategoriesList.splice(index, 1);
+  await saveCategories();
+  renderCategoryList();
+  showToast('ลบหมวดหมู่แล้ว');
+}
+
+function setupCategoryDrag() {
+  const container = document.getElementById('categoryList');
+  let dragIndex = null;
+
+  container.addEventListener('dragstart', (e) => {
+    const item = e.target.closest('.category-list-item[draggable]');
+    if (!item) return;
+    dragIndex = parseInt(item.dataset.catIndex);
+    item.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  container.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const item = e.target.closest('.category-list-item[draggable]');
+    if (!item || parseInt(item.dataset.catIndex) === dragIndex) return;
+    container.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    item.classList.add('drag-over');
+  });
+
+  container.addEventListener('dragleave', (e) => {
+    const item = e.target.closest('.category-list-item[draggable]');
+    if (item) item.classList.remove('drag-over');
+  });
+
+  container.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    container.querySelectorAll('.drag-over, .dragging').forEach(el => el.classList.remove('drag-over', 'dragging'));
+    const target = e.target.closest('.category-list-item[draggable]');
+    if (!target || dragIndex === null) return;
+    const toIndex = parseInt(target.dataset.catIndex);
+    if (toIndex === dragIndex) { dragIndex = null; return; }
+
+    const [moved] = adminCategoriesList.splice(dragIndex, 1);
+    adminCategoriesList.splice(toIndex, 0, moved);
+    await saveCategories();
+    renderCategoryList();
+    dragIndex = null;
+  });
+
+  container.addEventListener('dragend', () => {
+    container.querySelectorAll('.dragging, .drag-over').forEach(el => el.classList.remove('dragging', 'drag-over'));
+    dragIndex = null;
+  });
+}
+
+function renderCategoryCheckboxes(containerId, selectedIds) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (adminCategoriesList.length === 0) {
+    container.innerHTML = '<span style="color:#aaa;font-size:13px;">ยังไม่มีหมวดหมู่ (จัดการที่ปุ่ม "หมวดหมู่")</span>';
+    return;
+  }
+  const selected = Array.isArray(selectedIds) ? selectedIds : [];
+  container.innerHTML = adminCategoriesList.map(cat => `
+    <label class="category-checkbox-item">
+      <input type="checkbox" value="${escapeHtml(cat.id)}" ${selected.includes(cat.id) ? 'checked' : ''} />
+      <span>${escapeHtml(cat.name)}</span>
+    </label>
+  `).join('');
+}
+
+function getSelectedCategories(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+}
+
+// ============ BULK ASSIGN PRODUCTS TO CATEGORY ============
+let bulkAssignCatId = null;
+
+function openBulkAssignModal(catIndex) {
+  const cat = adminCategoriesList[catIndex];
+  if (!cat) return;
+  bulkAssignCatId = cat.id;
+
+  document.getElementById('bulkAssignCatName').textContent = cat.name;
+
+  // ใช้ allProducts จาก admin
+  const list = document.getElementById('bulkAssignList');
+  if (!allProducts || allProducts.length === 0) {
+    list.innerHTML = '<p style="text-align:center;color:#aaa;">ไม่มีสินค้า</p>';
+    return;
+  }
+
+  list.innerHTML = allProducts.map(item => {
+    const checked = Array.isArray(item.categories) && item.categories.includes(cat.id);
+    return `
+      <label class="bulk-assign-item">
+        <input type="checkbox" value="${item.id}" ${checked ? 'checked' : ''} />
+        <img src="${escapeHtml(item.image)}" alt="" class="bulk-assign-img" onerror="this.style.display='none'" />
+        <span>${escapeHtml(item.name)}</span>
+      </label>
+    `;
+  }).join('');
+
+  // ซ่อน category modal, เปิด bulk assign modal
+  document.getElementById('categoryModal').classList.remove('active');
+  document.getElementById('bulkAssignModal').classList.add('active');
+}
+
+function closeBulkAssignModal() {
+  document.getElementById('bulkAssignModal').classList.remove('active');
+  // กลับไป category modal
+  document.getElementById('categoryModal').classList.add('active');
+}
+
+async function confirmBulkAssign() {
+  if (!bulkAssignCatId) return;
+
+  const container = document.getElementById('bulkAssignList');
+  const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+
+  const toAdd = []; // itemIds ที่ต้องเพิ่ม category
+  const toRemove = []; // itemIds ที่ต้องลบ category
+
+  checkboxes.forEach(cb => {
+    const itemId = cb.value;
+    const item = allProducts.find(p => p.id === itemId);
+    const hadCat = item && Array.isArray(item.categories) && item.categories.includes(bulkAssignCatId);
+
+    if (cb.checked && !hadCat) toAdd.push(itemId);
+    else if (!cb.checked && hadCat) toRemove.push(itemId);
+  });
+
+  if (toAdd.length === 0 && toRemove.length === 0) {
+    closeBulkAssignModal();
+    return;
+  }
+
+  const btn = document.getElementById('confirmBulkAssignBtn');
+  btn.disabled = true;
+  btn.textContent = 'กำลังบันทึก...';
+
+  try {
+    const allChanges = [
+      ...toAdd.map(id => ({ id, action: 'add' })),
+      ...toRemove.map(id => ({ id, action: 'remove' }))
+    ];
+
+    for (let i = 0; i < allChanges.length; i += 499) {
+      const batch = db.batch();
+      allChanges.slice(i, i + 499).forEach(({ id, action }) => {
+        const ref = db.collection('items').doc(id);
+        if (action === 'add') {
+          batch.update(ref, { categories: firebase.firestore.FieldValue.arrayUnion(bulkAssignCatId) });
+        } else {
+          batch.update(ref, { categories: firebase.firestore.FieldValue.arrayRemove(bulkAssignCatId) });
+        }
+      });
+      await batch.commit();
+    }
+
+    // อัปเดต local cache
+    toAdd.forEach(id => {
+      const item = allProducts.find(p => p.id === id);
+      if (item) {
+        if (!Array.isArray(item.categories)) item.categories = [];
+        item.categories.push(bulkAssignCatId);
+      }
+    });
+    toRemove.forEach(id => {
+      const item = allProducts.find(p => p.id === id);
+      if (item && Array.isArray(item.categories)) {
+        item.categories = item.categories.filter(c => c !== bulkAssignCatId);
+      }
+    });
+
+    showToast(`บันทึกแล้ว — เพิ่ม ${toAdd.length} / ลบ ${toRemove.length} สินค้า`);
+    closeBulkAssignModal();
+  } catch (e) {
+    showAlert('บันทึกไม่ได้: ' + e.message, 'ผิดพลาด');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'บันทึก';
   }
 }
 

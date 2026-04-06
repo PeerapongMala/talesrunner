@@ -17,6 +17,7 @@ let currentAdminName = '';
 const stockAccum = {}; // { itemId: { total, timer } }
 
 let isOwner = false;
+let isExternal = false;
 
 function formatPrice(v) { const n = Number(v) || 0; return n % 1 === 0 ? n.toString() : n.toFixed(2); }
 
@@ -124,6 +125,7 @@ function setupLogin() {
         }
 
         isOwner = adminData && adminData.role === 'owner';
+        isExternal = adminData && adminData.role === 'external';
 
         // ลบจาก pending ถ้าค้างอยู่
         try { await db.collection('pending_users').doc(user.uid).delete(); } catch(e) {}
@@ -131,12 +133,25 @@ function setupLogin() {
         modal.classList.remove('active');
         document.getElementById('adminContent').style.display = 'block';
 
-        // ซ่อน tab ที่เฉพาะ owner
+        // ซ่อน section ตาม role
         if (!isOwner) {
-          document.querySelectorAll('[data-tab="coupons"],[data-tab="admins"]').forEach(el => el.style.display = 'none');
+          document.querySelectorAll('.owner-only').forEach(el => el.style.display = 'none');
         } else {
           const ownerActions = document.getElementById('ownerStockActions');
           if (ownerActions) ownerActions.style.display = 'flex';
+        }
+        if (isExternal) {
+          // external ซ่อน tab ตั้งค่า, ปุ่ม shop toggle, pay mode
+          const settingsTab = document.querySelector('[data-tab="settings"]');
+          if (settingsTab) settingsTab.style.display = 'none';
+          document.getElementById('shopToggleBtn').style.display = 'none';
+          document.getElementById('payModeBtn').style.display = 'none';
+          document.querySelectorAll('.owner-only').forEach(el => el.style.display = 'none');
+          // ซ่อนปุ่มจัดการหมวดหมู่ + stock toggles
+          const catBtn = document.getElementById('manageCategoriesBtn');
+          if (catBtn) catBtn.style.display = 'none';
+          const stockToggles = document.getElementById('adminStockToggles');
+          if (stockToggles) stockToggles.style.display = 'none';
         }
 
         await loadAdminNames();
@@ -144,6 +159,7 @@ function setupLogin() {
         const rawName = (adminData && adminData.name) || (adminData && adminData.email ? adminData.email.split('@')[0] : '') || (user.email ? user.email.split('@')[0] : 'แอดมิน');
         currentAdminName = resolveAdminName(rawName);
         if (typeof renderAdminStockToggles === 'function') renderAdminStockToggles();
+        if (typeof loadAdminCategories === 'function') await loadAdminCategories();
         initSortOrder();
         if (typeof loadRevenueResetDate === 'function') await loadRevenueResetDate();
         loadOrders();
@@ -204,7 +220,50 @@ function setupLogin() {
     }
   }
 
+  async function tryRegister() {
+    const email = emailInput.value.trim();
+    const pass = passInput.value;
+
+    if (!email || !pass) {
+      error.textContent = 'กรุณากรอก Email และรหัสผ่าน';
+      error.style.display = 'block';
+      return;
+    }
+    if (pass.length < 6) {
+      error.textContent = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+      error.style.display = 'block';
+      return;
+    }
+
+    const regBtn = document.getElementById('registerSubmit');
+    regBtn.disabled = true;
+    regBtn.textContent = 'กำลังสมัคร...';
+    error.style.display = 'none';
+
+    try {
+      await firebase.auth().createUserWithEmailAndPassword(email, pass);
+      // onAuthStateChanged จะจัดการ → ตรวจ admin → ถ้าไม่ใช่ → เขียน pending_users
+    } catch (e) {
+      let msg;
+      if (e.code === 'auth/email-already-in-use') {
+        msg = 'Email นี้มีบัญชีอยู่แล้ว — กรุณากด "เข้าสู่ระบบ" แทน';
+      } else if (e.code === 'auth/weak-password') {
+        msg = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+      } else if (e.code === 'auth/invalid-email') {
+        msg = 'รูปแบบ Email ไม่ถูกต้อง';
+      } else {
+        msg = 'สมัครไม่สำเร็จ: ' + e.message;
+      }
+      error.textContent = msg;
+      error.style.display = 'block';
+    } finally {
+      regBtn.disabled = false;
+      regBtn.textContent = 'สมัครใหม่ (ขอเข้าระบบ)';
+    }
+  }
+
   btn.addEventListener('click', tryLogin);
+  document.getElementById('registerSubmit').addEventListener('click', tryRegister);
   passInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') tryLogin();
   });
@@ -238,6 +297,12 @@ function setupTabs() {
 
       document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
       document.getElementById(tab.dataset.tab + 'Section').classList.add('active');
+
+      // ซ่อน badge เมื่อกลับมาที่ tab orders
+      if (tab.dataset.tab === 'orders') {
+        const badge = document.getElementById('orderNotiBadge');
+        if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
+      }
     });
   });
 }
@@ -260,7 +325,7 @@ function clearFieldErrors() {
 function setupEscapeKey() {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    const modals = ['addProductModal', 'addStockModal', 'stockHistoryModal', 'editProductModal', 'addCouponModal', 'shopStateModal', 'closeReasonModal', 'slipModal', 'editDisplayNameModal', 'cancelReasonModal', 'alertModal'];
+    const modals = ['pickRoleModal', 'renameCategoryModal', 'bulkAssignModal', 'categoryModal', 'addProductModal', 'addStockModal', 'stockHistoryModal', 'editProductModal', 'addCouponModal', 'shopStateModal', 'closeReasonModal', 'slipModal', 'editDisplayNameModal', 'cancelReasonModal', 'alertModal'];
     for (const id of modals) {
       const el = document.getElementById(id);
       if (el && el.classList.contains('active')) {
@@ -301,6 +366,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('confirmEditProduct').addEventListener('click', confirmEditProduct);
   document.getElementById('cancelEditProduct').addEventListener('click', closeEditProductModal);
+
+  // Category management
+  document.getElementById('manageCategoriesBtn').addEventListener('click', openCategoryModal);
+  document.getElementById('closeCategoryModalBtn').addEventListener('click', closeCategoryModal);
+  document.getElementById('addCategoryBtn').addEventListener('click', addCategory);
+  document.getElementById('newCategoryName').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') addCategory();
+  });
+  document.getElementById('categoryList').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-cat-action]');
+    if (!btn) return;
+    const action = btn.dataset.catAction;
+    const index = parseInt(btn.dataset.catIndex);
+    if (action === 'assign') openBulkAssignModal(index);
+    else if (action === 'rename') openRenameCategoryModal(index);
+    else if (action === 'delete') deleteCategory(index);
+  });
+
+  setupCategoryDrag();
+
+  // Rename category modal
+  document.getElementById('cancelRenameCategoryBtn').addEventListener('click', closeRenameCategoryModal);
+  document.getElementById('confirmRenameCategoryBtn').addEventListener('click', confirmRenameCategory);
+  document.getElementById('renameCategoryInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') confirmRenameCategory();
+  });
+
+  // Bulk assign modal
+  document.getElementById('cancelBulkAssignBtn').addEventListener('click', closeBulkAssignModal);
+  document.getElementById('confirmBulkAssignBtn').addEventListener('click', confirmBulkAssign);
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     await firebase.auth().signOut();
@@ -468,6 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof unsubAdmins !== 'undefined' && unsubAdmins) { unsubAdmins(); unsubAdmins = null; }
       if (typeof unsubPendingAdmins !== 'undefined' && unsubPendingAdmins) { unsubPendingAdmins(); unsubPendingAdmins = null; }
       if (typeof unsubAdminStock !== 'undefined' && unsubAdminStock) { unsubAdminStock(); unsubAdminStock = null; }
+      if (typeof unsubShopSettings !== 'undefined' && unsubShopSettings) { unsubShopSettings(); unsubShopSettings = null; }
     } else {
       if (currentAdminName) {
         if (!unsubOrders) loadOrders();
@@ -475,10 +571,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof unsubCoupons !== 'undefined' && !unsubCoupons) loadCoupons();
         if (typeof unsubBans !== 'undefined' && !unsubBans) loadBanList();
         if (typeof unsubAdmins !== 'undefined' && !unsubAdmins) loadAdminRoles();
+        if (typeof unsubShopSettings !== 'undefined' && !unsubShopSettings && typeof listenShopToggle === 'function') listenShopToggle();
       }
     }
   });
 
-  // loadCoupons ถูกเรียกผ่าน setupLogin > onAuthStateChanged แล้ว (ไม่ต้องเรียกซ้ำ)
+  // Settings sub-tabs
+  document.getElementById('settingsSubTabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('.sub-tab');
+    if (!btn || btn.style.display === 'none') return;
+    document.querySelectorAll('#settingsSubTabs .sub-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    const target = btn.dataset.settab;
+    document.querySelectorAll('.settings-sub').forEach(el => el.classList.remove('active'));
+    const card = document.getElementById(target + 'Card');
+    if (card) card.classList.add('active');
+  });
 
 });

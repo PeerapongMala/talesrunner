@@ -43,8 +43,12 @@ let currentItem = null;
 let currentQty = 1;
 let shopOpen = true;
 let customerPayMode = 'order'; // 'pay' = โอนเลย, 'order' = สั่งก่อน
+let currentPage = 1;
+const ITEMS_PER_PAGE = 12;
 let customerSlipAttach = true; // แนบสลิปหรือไม่
 let adminPayMode = 'both'; // 'both' | 'pay_only' | 'order_only'
+let currentCategory = 'all';
+let categoriesList = []; // { id, name, order }
 
 // Payment & Coupon State
 let currentPromptPay = "0834405857"; // เปลี่ยนเบอร์พร้อมเพย์รับเงินตรงนี้
@@ -179,19 +183,34 @@ function getBundleCount(stock, bundleQty) {
 function renderItems() {
   const grid = document.getElementById("itemGrid");
   const totalEl = document.getElementById("totalItems");
-  const inStockCount = items.filter(item => {
+  const pagination = document.getElementById("shopPagination");
+
+  // filter ตาม category tab
+  const filtered = currentCategory === 'all'
+    ? items
+    : items.filter(item => Array.isArray(item.categories) && item.categories.includes(currentCategory));
+
+  const inStockCount = filtered.filter(item => {
     const avail = typeof getAvailableStock === "function" ? getAvailableStock(item) : Number(item.stock) || 0;
     return avail > 0;
   }).length;
   totalEl.textContent = `TOTAL ${inStockCount} ITEMS`;
 
-  if (items.length === 0) {
+  if (filtered.length === 0) {
     grid.innerHTML =
       '<p style="grid-column:1/-1;text-align:center;color:#aaa;">ยังไม่มีสินค้า</p>';
+    if (pagination) pagination.style.display = 'none';
     return;
   }
 
-  grid.innerHTML = items
+  // Pagination
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
+  const start = (currentPage - 1) * ITEMS_PER_PAGE;
+  const pageItems = filtered.slice(start, start + ITEMS_PER_PAGE);
+
+  grid.innerHTML = pageItems
     .map((item) => {
       const available =
         typeof getAvailableStock === "function"
@@ -224,6 +243,18 @@ function renderItems() {
     })
     .join("");
 
+  // Pagination controls
+  if (pagination) {
+    if (totalPages > 1) {
+      pagination.style.display = 'flex';
+      document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages}`;
+      document.getElementById('prevPageBtn').disabled = currentPage <= 1;
+      document.getElementById('nextPageBtn').disabled = currentPage >= totalPages;
+    } else {
+      pagination.style.display = 'none';
+    }
+  }
+
   // อัปเดต countdown ทันทีหลัง render (ไม่ต้องรอ interval)
   updatePromoCountdowns();
 }
@@ -237,18 +268,76 @@ function setupTabs() {
       tab.classList.add("active");
 
       const target = tab.dataset.tab;
-      document.getElementById("shopSection").style.display =
-        target === "shop" ? "block" : "none";
-      document
-        .getElementById("historySection")
-        .classList.toggle("active", target === "history");
-      document.getElementById("feedSection").style.display =
-        target === "feed" ? "block" : "none";
-      document.getElementById("rightColumn").style.display =
-        target === "shop" ? "" : "none";
+      document.getElementById("shopSection").style.display = target === "shop" ? "block" : "none";
+      document.getElementById("categoryTabs").style.display = target === "shop" ? "flex" : "none";
+      document.getElementById("historySubTabs").style.display = target === "history" ? "flex" : "none";
+      document.getElementById("rightColumn").style.display = target === "shop" ? "" : "none";
 
-      if (target === "feed" && typeof loadFeed === "function") loadFeed();
+      // ซ่อน history/feed ก่อน แล้วให้ sub-tab จัดการ
+      if (target === "history") {
+        // default เปิด "ประวัติสั่ง"
+        const subTabs = document.querySelectorAll('#historySubTabs .sub-tab');
+        subTabs.forEach(t => t.classList.toggle('active', t.dataset.historytab === 'orders'));
+        document.getElementById("historySection").classList.add("active");
+        document.getElementById("feedSection").style.display = "none";
+      } else {
+        document.getElementById("historySection").classList.remove("active");
+        document.getElementById("feedSection").style.display = "none";
+      }
     });
+  });
+}
+
+// ============ HISTORY SUB-TABS ============
+function setupHistorySubTabs() {
+  document.getElementById('historySubTabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('.sub-tab');
+    if (!btn) return;
+    document.querySelectorAll('#historySubTabs .sub-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+
+    const target = btn.dataset.historytab;
+    document.getElementById("historySection").classList.toggle("active", target === "orders");
+    document.getElementById("feedSection").style.display = target === "feed" ? "block" : "none";
+    if (target === "feed" && typeof loadFeed === "function") loadFeed();
+  });
+}
+
+// ============ CATEGORY TABS ============
+function loadCategories() {
+  const processDoc = (doc) => {
+    categoriesList = (doc.exists && Array.isArray(doc.data().list)) ? doc.data().list : [];
+    categoriesList.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    renderCategoryTabs();
+  };
+
+  if (_quotaSaving) {
+    db.collection("settings").doc("categories").get().then(processDoc).catch(() => {});
+  } else {
+    if (window.unsubCategories) { window.unsubCategories(); window.unsubCategories = null; }
+    window.unsubCategories = db.collection("settings").doc("categories").onSnapshot(processDoc, () => {});
+  }
+}
+
+function renderCategoryTabs() {
+  const container = document.getElementById('categoryTabs');
+  let html = '<button class="sub-tab active" data-category="all">ทั้งหมด</button>';
+  categoriesList.forEach(cat => {
+    html += `<button class="sub-tab" data-category="${escapeHtml(cat.id)}">${escapeHtml(cat.name)}</button>`;
+  });
+  container.innerHTML = html;
+  currentCategory = 'all';
+}
+
+function setupCategoryTabs() {
+  document.getElementById('categoryTabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('.sub-tab');
+    if (!btn) return;
+    document.querySelectorAll('#categoryTabs .sub-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    currentCategory = btn.dataset.category;
+    currentPage = 1;
+    renderItems();
   });
 }
 
@@ -298,6 +387,9 @@ function updateShopHours() {
 // ============ EVENT LISTENERS ============
 document.addEventListener("DOMContentLoaded", () => {
   setupTabs();
+  setupHistorySubTabs();
+  setupCategoryTabs();
+  loadCategories();
   setupEscapeKey();
   setupPaymentModeToggle();
   loadItems();
@@ -308,23 +400,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // จัดการการพับจอ (Page Visibility) เพื่อประหยัดโควต้า
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
-      if (window.unsubItems) {
-        window.unsubItems();
-        window.unsubItems = null;
-      }
-      if (window.unsubStats) {
-        window.unsubStats();
-        window.unsubStats = null;
-      }
-      if (window.unsubReservations) {
-        window.unsubReservations();
-        window.unsubReservations = null;
-      }
+      if (window.unsubItems) { window.unsubItems(); window.unsubItems = null; }
+      if (window.unsubStats) { window.unsubStats(); window.unsubStats = null; }
+      if (window.unsubReservations) { window.unsubReservations(); window.unsubReservations = null; }
+      if (window.unsubShopStatus) { window.unsubShopStatus(); window.unsubShopStatus = null; }
+      if (window.unsubCategories) { window.unsubCategories(); window.unsubCategories = null; }
       _stopHeartbeat();
     } else {
       if (!window.unsubItems) loadItems();
       if (!window.unsubStats) loadStats();
       if (!window.unsubReservations) loadReservations();
+      if (!window.unsubShopStatus) listenShopStatus();
+      if (!window.unsubCategories) loadCategories();
       if (Object.keys(cart).length > 0) syncReservation();
     }
   });
@@ -332,6 +419,14 @@ document.addEventListener("DOMContentLoaded", () => {
   restoreToasts();
   updateShopHours();
   setInterval(updateShopHours, 60000);
+
+  // Pagination
+  document.getElementById('prevPageBtn').addEventListener('click', () => {
+    if (currentPage > 1) { currentPage--; renderItems(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  });
+  document.getElementById('nextPageBtn').addEventListener('click', () => {
+    currentPage++; renderItems(); window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 
   // Promo Countdown Loop (function อยู่ global แล้ว)
   setInterval(updatePromoCountdowns, 1000);
@@ -579,9 +674,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (btn) cancelOrder(btn.dataset.orderId);
   });
 
-  // Go to feed tab from stats banner
+  // Go to feed tab from stats banner → switch to history tab, then feed sub-tab
   document.getElementById("goToFeedLink").addEventListener("click", () => {
-    document.querySelector('.nav-tab[data-tab="feed"]').click();
+    document.querySelector('.nav-tab[data-tab="history"]').click();
+    const feedBtn = document.querySelector('#historySubTabs .sub-tab[data-historytab="feed"]');
+    if (feedBtn) feedBtn.click();
   });
 
   // Feed load more
@@ -759,18 +856,22 @@ function processShopSettings(doc) {
   applyPaymentStatus();
 }
 
+let _shopStatusInterval = null;
 function listenShopStatus() {
+  if (window.unsubShopStatus) { window.unsubShopStatus(); window.unsubShopStatus = null; }
   if (_quotaSaving) {
     db.collection("settings").doc("shop").get()
       .then(doc => processShopSettings(doc))
       .catch(() => {});
   } else {
-    db.collection("settings").doc("shop").onSnapshot(
+    window.unsubShopStatus = db.collection("settings").doc("shop").onSnapshot(
       (doc) => processShopSettings(doc),
       (e) => { if (typeof handleQuotaError === 'function') handleQuotaError(e, 'shopStatus'); }
     );
   }
-  setInterval(applyShopStatus, 60000);
+  if (!_shopStatusInterval) {
+    _shopStatusInterval = setInterval(applyShopStatus, 60000);
+  }
 }
 
 // ============ TOAST PERSISTENCE ============
