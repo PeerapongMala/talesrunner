@@ -1,6 +1,8 @@
 // ============ ADMIN ROLES MANAGEMENT ============
 let unsubAdmins = null;
 let unsubPendingAdmins = null;
+let unsubShopSettings = null;
+let _payModeCallback = null; // callback จาก setupPayModeToggle
 
 function loadAdminRoles() {
   if (unsubAdmins) unsubAdmins();
@@ -14,20 +16,28 @@ function loadAdminRoles() {
     }
     list.innerHTML = snap.docs.map(doc => {
       const d = doc.data();
-      const roleLabel = d.role === 'owner' ? ' <span style="color:#ffeb3b;font-size:11px;font-weight:600;">👑 Owner</span>' : '';
+      const role = d.role || 'admin';
+      const roleLabel = role === 'owner'
+        ? '<span style="color:#ffeb3b;font-size:11px;font-weight:600;">👑 Owner</span>'
+        : role === 'external'
+          ? '<span style="color:#ff9800;font-size:11px;font-weight:600;">ภายนอก</span>'
+          : '<span style="color:#4fc3f7;font-size:11px;">Admin</span>';
       const displayName = d.displayName || d.name || '-';
       const editBtn = isOwner
         ? `<button class="btn-table secondary" style="font-size:11px;padding:3px 8px;" data-action="editDisplayName" data-uid="${doc.id}" data-current="${escapeHtml(displayName)}">แก้ไข</button>`
         : '';
+      const toggleRoleBtn = (isOwner && role !== 'owner')
+        ? `<button class="btn-table secondary" style="font-size:11px;padding:3px 8px;" data-action="toggleRole" data-uid="${doc.id}" data-role="${role}">${role === 'external' ? 'เป็น Admin' : 'เป็นภายนอก'}</button>`
+        : '';
       return `<tr>
-        <td style="word-break: break-all;">${escapeHtml(d.email || doc.id)}${roleLabel}</td>
+        <td style="word-break: break-all;">${escapeHtml(d.email || doc.id)} ${roleLabel}</td>
         <td style="word-break: break-all;">${escapeHtml(d.name || '-')}</td>
         <td style="word-break: break-all;">
           <span style="color:#ff69b4;font-weight:600;">${escapeHtml(displayName)}</span>
           ${editBtn}
         </td>
-        <td style="text-align: center;">
-          ${d.role === 'owner' ? '<span style="color:#aaa;font-size:12px;">-</span>' : `<button class="btn-table danger" data-action="removeAdmin" data-uid="${doc.id}">ลบสิทธิ์</button>`}
+        <td style="text-align: center; white-space: nowrap;">
+          ${role === 'owner' ? '<span style="color:#aaa;font-size:12px;">-</span>' : `${toggleRoleBtn} <button class="btn-table danger" data-action="removeAdmin" data-uid="${doc.id}">ลบสิทธิ์</button>`}
         </td>
       </tr>`;
     }).join("");
@@ -55,7 +65,9 @@ function loadAdminRoles() {
 }
 
 async function approveAdminRole(uid, email) {
-  if (!await showConfirm('ต้องการให้สิทธิ์ Admin แก่ ' + email + ' ใช่หรือไม่?')) return;
+  // ให้ owner เลือก role
+  const role = await pickAdminRole(email);
+  if (!role) return;
 
   const rawName = email.split('@')[0];
   const displayName = await askDisplayName('ตั้งชื่อแสดงผล', 'ตั้งชื่อให้แอดมิน ' + email, rawName);
@@ -66,13 +78,36 @@ async function approveAdminRole(uid, email) {
       email: email,
       name: rawName,
       displayName: displayName,
-      role: 'admin',
+      role: role,
       grantedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await db.collection('pending_users').doc(uid).delete();
     await loadAdminNames();
-    showToast('เพิ่มแอดมินเรียบร้อย');
+    const roleLabel = role === 'external' ? 'แอดมินภายนอก' : 'แอดมิน';
+    showToast(`เพิ่ม ${displayName} เป็น${roleLabel}เรียบร้อย`);
   } catch (e) { showAlert('เพิ่มแอดมินไม่ได้: ' + e.message, 'ผิดพลาด'); }
+}
+
+function pickAdminRole(email) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('pickRoleModal');
+    document.getElementById('pickRoleEmail').textContent = email;
+    modal.classList.add('active');
+
+    function cleanup() {
+      modal.classList.remove('active');
+      document.getElementById('btnRoleAdmin').removeEventListener('click', onAdmin);
+      document.getElementById('btnRoleExternal').removeEventListener('click', onExternal);
+      document.getElementById('cancelPickRoleBtn').removeEventListener('click', onCancel);
+    }
+    function onAdmin() { cleanup(); resolve('admin'); }
+    function onExternal() { cleanup(); resolve('external'); }
+    function onCancel() { cleanup(); resolve(null); }
+
+    document.getElementById('btnRoleAdmin').addEventListener('click', onAdmin);
+    document.getElementById('btnRoleExternal').addEventListener('click', onExternal);
+    document.getElementById('cancelPickRoleBtn').addEventListener('click', onCancel);
+  });
 }
 
 async function rejectPendingAdmin(uid) {
@@ -81,6 +116,16 @@ async function rejectPendingAdmin(uid) {
     await db.collection('pending_users').doc(uid).delete();
     showToast('ลบคำขอแล้ว');
   } catch (e) { showAlert('ลบไม่ได้: ' + e.message, 'ผิดพลาด'); }
+}
+
+async function toggleAdminRole(uid, currentRole) {
+  const newRole = currentRole === 'external' ? 'admin' : 'external';
+  const label = newRole === 'external' ? 'แอดมินภายนอก (เห็นเฉพาะสินค้าตัวเอง)' : 'แอดมินปกติ (เห็นทุกสินค้า)';
+  if (!await showConfirm(`เปลี่ยนเป็น ${label}?`)) return;
+  try {
+    await db.collection('admin_users').doc(uid).update({ role: newRole });
+    showToast('เปลี่ยน role เรียบร้อย');
+  } catch (e) { showAlert('เปลี่ยนไม่ได้: ' + e.message, 'ผิดพลาด'); }
 }
 
 async function removeAdminRole(uid) {
@@ -183,6 +228,7 @@ document.addEventListener('click', (e) => {
   if (action === 'removeAdmin') removeAdminRole(uid);
   else if (action === 'approveAdmin') approveAdminRole(uid, btn.dataset.email);
   else if (action === 'rejectAdmin') rejectPendingAdmin(uid);
+  else if (action === 'toggleRole') toggleAdminRole(uid, btn.dataset.role);
   else if (action === 'editDisplayName') editAdminDisplayName(uid, btn.dataset.current);
   else if (action === 'viewSlip') viewSlip(id);
   else if (action === 'toggleCoupon') toggleCouponStatus(id, btn.dataset.active === 'true');
@@ -218,6 +264,45 @@ function updateFaviconAndTitle(pendingCount) {
   img.src = 'pic/jin-arc-trace.png';
 }
 
+// แจ้งเตือน order ใหม่ (badge + เสียง)
+let _audioCtx = null;
+function _getAudioCtx() {
+  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return _audioCtx;
+}
+
+function playBeep(freq, duration) {
+  try {
+    const ctx = _getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    gain.gain.value = 0.15;
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  } catch (e) { /* ignore audio errors */ }
+}
+
+function notifyNewOrder(count) {
+  // Badge บน tab Order Board
+  const badge = document.getElementById('orderNotiBadge');
+  const activeTab = document.querySelector('.nav-tab.active');
+  const isOnOrderTab = activeTab && activeTab.dataset.tab === 'orders';
+  if (badge && !isOnOrderTab) {
+    const prev = parseInt(badge.textContent) || 0;
+    badge.textContent = '+' + (prev + count);
+    badge.style.display = 'inline';
+  }
+  // เสียงแจ้งเตือน
+  playBeep(800, 0.15);
+  setTimeout(() => playBeep(1000, 0.2), 180);
+}
+
+let _completedOrders = []; // cache completed/cancelled docs
+let _lastPendingSnapshot = null; // เก็บ pending snapshot ล่าสุด
+
 function loadOrders() {
   const board = document.getElementById('orderBoard');
 
@@ -227,13 +312,22 @@ function loadOrders() {
     unsubOrders = null;
   }
 
-  const query = db.collection('orders')
+  // Real-time: เฉพาะ pending (ลด quota — completed/cancelled ไม่ต้อง listen)
+  const pendingQuery = db.collection('orders')
+    .where('status', '==', 'pending')
     .orderBy('createdAt', 'desc')
     .limit(currentOrderLimit);
 
+  function renderCombined(pendingDocs) {
+    _lastPendingSnapshot = pendingDocs;
+    // รวม pending (realtime) + completed/cancelled (cache)
+    const combined = { docs: [...pendingDocs, ..._completedOrders] };
+    processOrderSnapshot(combined, board);
+  }
+
   // Quota saving mode → ใช้ .get() ครั้งเดียว
   if (_quotaSaving) {
-    query.get().then(snapshot => processOrderSnapshot(snapshot, board)).catch(e => {
+    pendingQuery.get().then(snapshot => renderCombined(snapshot.docs)).catch(e => {
       console.error(e);
       if (typeof handleQuotaError === 'function') handleQuotaError(e, 'loadOrders');
       board.innerHTML = '<p style="color:#ff6b6b;text-align:center;">โหลด order ไม่ได้</p>';
@@ -241,20 +335,53 @@ function loadOrders() {
     return;
   }
 
-  unsubOrders = query.onSnapshot(
-    snapshot => processOrderSnapshot(snapshot, board),
+  unsubOrders = pendingQuery.onSnapshot(
+    snapshot => renderCombined(snapshot.docs),
     e => {
       console.error(e);
       if (typeof handleQuotaError === 'function') handleQuotaError(e, 'loadOrders');
       board.innerHTML = '<p style="color:#ff6b6b;text-align:center;">โหลด order ไม่ได้</p>';
     }
   );
+
+  // โหลด completed/cancelled ครั้งเดียว (ไม่ real-time)
+  loadCompletedOrders();
+}
+
+async function loadCompletedOrders() {
+  try {
+    const snap = await db.collection('orders')
+      .where('status', 'in', ['completed', 'cancelled'])
+      .orderBy('createdAt', 'desc')
+      .limit(currentOrderLimit)
+      .get();
+    _completedOrders = snap.docs;
+    // re-render ด้วย pending ล่าสุด + completed ใหม่
+    if (_lastPendingSnapshot) {
+      const board = document.getElementById('orderBoard');
+      const combined = { docs: [..._lastPendingSnapshot, ..._completedOrders] };
+      processOrderSnapshot(combined, board);
+    }
+  } catch (e) {
+    console.warn('loadCompletedOrders:', e.message);
+    if (typeof handleQuotaError === 'function') handleQuotaError(e, 'loadCompletedOrders');
+  }
 }
 
 function processOrderSnapshot(snapshot, board) {
+  // External admin → กรองเฉพาะ order ที่มีสินค้าของตัวเอง
+  let docs = snapshot.docs;
+  if (isExternal && typeof isMyProduct === 'function') {
+    const myProductIds = new Set(allProducts.filter(p => isMyProduct(p)).map(p => p.id));
+    docs = docs.filter(doc => {
+      const items = doc.data().items || [];
+      return items.some(i => myProductIds.has(i.itemId));
+    });
+  }
+
   // นับสถานะ
   let pending = 0, completed = 0, cancelled = 0;
-  snapshot.docs.forEach(doc => {
+  docs.forEach(doc => {
     const s = doc.data().status || 'pending';
     if (s === 'pending') pending++;
     else if (s === 'completed') completed++;
@@ -269,28 +396,35 @@ function processOrderSnapshot(snapshot, board) {
 
   const newIds = new Set();
   if (!firstLoad) {
-    snapshot.docs.forEach(doc => {
+    docs.forEach(doc => {
       if (!knownOrderIds.has(doc.id)) newIds.add(doc.id);
     });
     if (newIds.size > 0) {
       showToast('Order ใหม่ +' + newIds.size + ' | รอดำเนินการ: ' + pending);
+      notifyNewOrder(newIds.size);
     }
   }
-  knownOrderIds = new Set(snapshot.docs.map(doc => doc.id));
+  // ถ้าอยู่ tab orders → ซ่อน badge
+  const activeTab = document.querySelector('.nav-tab.active');
+  if (activeTab && activeTab.dataset.tab === 'orders') {
+    const badge = document.getElementById('orderNotiBadge');
+    if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
+  }
+  knownOrderIds = new Set(docs.map(doc => doc.id));
   firstLoad = false;
 
   const loadMoreBtn = document.getElementById('loadMoreOrdersBtn');
   if (loadMoreBtn) {
-    loadMoreBtn.style.display = snapshot.docs.length >= currentOrderLimit ? 'inline-block' : 'none';
+    loadMoreBtn.style.display = docs.length >= currentOrderLimit ? 'inline-block' : 'none';
   }
 
-  if (snapshot.empty) {
+  if (docs.length === 0) {
     board.innerHTML = '<p style="color:#aaa;text-align:center;">ยังไม่มี order</p>';
     return;
   }
 
-  const total = snapshot.docs.length;
-  board.innerHTML = snapshot.docs.map((doc, index) => {
+  const total = docs.length;
+  board.innerHTML = docs.map((doc, index) => {
     const order = doc.data();
     loadedOrdersCache[doc.id] = order;
 
@@ -342,13 +476,13 @@ function processOrderSnapshot(snapshot, board) {
           <span class="order-status-badge ${status}">${status === 'pending' ? 'รอดำเนินการ' : status === 'completed' ? 'เสร็จแล้ว' : 'ยกเลิก'}</span>
           ${status === 'pending' ? `<button class="btn-order-action btn-order-complete" data-action="deliver" data-id="${docId}">&#128666; ส่งของ</button>` : ''}
           ${status === 'pending' ? `<button class="btn-order-action btn-order-cancel" data-action="cancel" data-id="${docId}">&#10005; ยกเลิก</button>` : ''}
-          <button class="btn-order-action btn-order-ban" data-action="ban" data-fb="${fbEscaped}">BAN</button>
+          ${status === 'pending' && !bannedSet.has((order.facebook || '').toLowerCase()) ? `<button class="btn-order-action btn-order-ban" data-action="ban" data-fb="${fbEscaped}">BAN</button>` : ''}
         </div>
       </div>
     `;
   }).join('');
 
-  if (typeof updateRevenueSummary === 'function') updateRevenueSummary(snapshot.docs);
+  if (typeof updateRevenueSummary === 'function') updateRevenueSummary(docs);
   if (typeof renderOfflineQueue === 'function') renderOfflineQueue();
 }
 
@@ -404,6 +538,7 @@ async function blockFacebook(fbName) {
 
 // ============ BAN LIST ============
 let unsubBans = null;
+let bannedSet = new Set(); // เก็บชื่อที่ถูก ban (lowercase)
 
 function loadBanList() {
   if (unsubBans) { unsubBans(); unsubBans = null; }
@@ -412,6 +547,7 @@ function loadBanList() {
 
   unsubBans = db.collection('settings').doc('spam').onSnapshot(doc => {
     const blocked = doc.exists && Array.isArray(doc.data().blocked) ? doc.data().blocked : [];
+    bannedSet = new Set(blocked.map(n => n.toLowerCase()));
 
     if (blocked.length === 0) {
       container.innerHTML = '<p style="color:#aaa;text-align:center;">ยังไม่มีรายชื่อที่ถูก BAN</p>';
@@ -518,16 +654,20 @@ function listenShopToggle() {
       if (data.shopState) currentMode = data.shopState;
       else if (data.isOpen === false) currentMode = 'force_close';
       else currentMode = 'auto';
+      // broadcast payMode ให้ setupPayModeToggle
+      if (_payModeCallback) _payModeCallback(data.payMode || 'both');
     } else {
       currentMode = 'auto';
+      if (_payModeCallback) _payModeCallback('both');
     }
     updateBtn(currentMode);
   }
 
+  if (unsubShopSettings) { unsubShopSettings(); unsubShopSettings = null; }
   if (_quotaSaving) {
     db.collection('settings').doc('shop').get().then(doc => processShopDoc(doc)).catch(() => {});
   } else {
-    db.collection('settings').doc('shop').onSnapshot(
+    unsubShopSettings = db.collection('settings').doc('shop').onSnapshot(
       doc => processShopDoc(doc),
       e => { if (typeof handleQuotaError === 'function') handleQuotaError(e, 'shopToggle'); }
     );
@@ -690,10 +830,8 @@ function setupPayModeToggle() {
     btn.style.borderColor = c.border;
   }
 
-  db.collection('settings').doc('shop').onSnapshot(doc => {
-    const mode = (doc.exists && doc.data().payMode) ? doc.data().payMode : 'both';
-    updateBtn(mode);
-  });
+  // ใช้ shared listener จาก listenShopToggle แทน onSnapshot แยก
+  _payModeCallback = (mode) => updateBtn(mode);
 
   btn.addEventListener('click', () => modal.classList.add('active'));
   document.getElementById('payModeCancelBtn').addEventListener('click', () => modal.classList.remove('active'));

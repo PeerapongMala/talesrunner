@@ -177,6 +177,8 @@ function enterQuotaSavingMode() {
     if (window.unsubItems) { window.unsubItems(); window.unsubItems = null; }
     if (window.unsubStats) { window.unsubStats(); window.unsubStats = null; }
     if (window.unsubReservations) { window.unsubReservations(); window.unsubReservations = null; }
+    if (window.unsubShopStatus) { window.unsubShopStatus(); window.unsubShopStatus = null; }
+    if (window.unsubCategories) { window.unsubCategories(); window.unsubCategories = null; }
     if (typeof _stopHeartbeat === 'function') _stopHeartbeat();
   }
   // ปิด listener ฝั่ง admin
@@ -186,8 +188,27 @@ function enterQuotaSavingMode() {
   if (typeof unsubBans !== 'undefined' && unsubBans) { unsubBans(); unsubBans = null; }
   if (typeof unsubAdmins !== 'undefined' && unsubAdmins) { unsubAdmins(); unsubAdmins = null; }
   if (typeof unsubPendingAdmins !== 'undefined' && unsubPendingAdmins) { unsubPendingAdmins(); unsubPendingAdmins = null; }
+  if (typeof unsubShopSettings !== 'undefined' && unsubShopSettings) { unsubShopSettings(); unsubShopSettings = null; }
+
+  // พยายามปิดร้านอัตโนมัติ
+  autoCloseShopOnQuota();
 
   showQuotaBanner();
+}
+
+// ปิดร้านอัตโนมัติเมื่อ quota หมด
+async function autoCloseShopOnQuota() {
+  try {
+    if (typeof db === 'undefined') return;
+    await db.collection('settings').doc('shop').set({
+      shopState: 'force_close',
+      isOpen: false,
+      closeReason: 'ร้านปิดชั่วคราว (ระบบขัดข้อง)'
+    }, { merge: true });
+    console.warn('[QUOTA] Auto-closed shop due to quota exhaustion');
+  } catch (e) {
+    console.warn('[QUOTA] Could not auto-close shop:', e.message);
+  }
 }
 
 function handleQuotaError(err, context) {

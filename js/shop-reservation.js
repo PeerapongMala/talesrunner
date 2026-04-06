@@ -25,6 +25,10 @@ const _sessionId = getSessionId();
 
 // ============ SYNC CART → FIRESTORE ============
 function syncReservation() {
+  // เริ่ม listener เมื่อ cart มีของ (ประหยัด quota สำหรับคนดูเฉยๆ)
+  if (Object.keys(cart).length > 0) {
+    _startReservationListener();
+  }
   // Debounce: ป้องกันเขียน Firestore ถี่เกินไป (เช่น กด +/- รัว)
   clearTimeout(_syncDebounce);
   _syncDebounce = setTimeout(_doSync, 300);
@@ -40,6 +44,8 @@ async function _doSync() {
       _reservationExists = false;
       _stopHeartbeat();
     }
+    // ปิด listener เมื่อ cart ว่าง (ประหยัด quota)
+    _stopReservationListener();
     return;
   }
 
@@ -80,6 +86,18 @@ function _stopHeartbeat() {
 
 // ============ LISTEN RESERVATIONS (real-time) ============
 function loadReservations() {
+  // ถ้า cart ว่าง → ไม่เริ่ม listener (ประหยัด quota)
+  if (typeof cart !== 'undefined' && Object.keys(cart).length === 0 && !_reservationExists) {
+    _allReservations = [];
+    if (typeof renderItems === 'function') renderItems();
+    return;
+  }
+  _startReservationListener();
+}
+
+function _startReservationListener() {
+  if (window.unsubReservations) return; // มี listener อยู่แล้ว
+
   // Quota saving mode → skip real-time, ใช้ข้อมูลเก่า
   if (typeof _quotaSaving !== 'undefined' && _quotaSaving) {
     _allReservations = [];
@@ -111,6 +129,13 @@ function loadReservations() {
       console.warn('reservation listener:', e.message);
       if (typeof handleQuotaError === 'function') handleQuotaError(e, 'reservations');
     });
+}
+
+function _stopReservationListener() {
+  if (window.unsubReservations) {
+    window.unsubReservations();
+    window.unsubReservations = null;
+  }
 }
 
 // ============ AVAILABLE STOCK HELPERS ============

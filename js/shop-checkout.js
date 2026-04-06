@@ -242,12 +242,13 @@ async function submitOrder() {
   }
 
   const entries = Object.entries(cart);
+  // สร้าง cartItems เบื้องต้น (bundleQty จะอัปเดตจาก server ใน transaction)
   const cartItems = entries.map(([id, { item, qty }]) => {
     const bq = getBundleQty(item);
     return {
       itemId: id,
       name: item.name,
-      qty: qty * bq, // แปลงชุดเป็นชิ้นจริง
+      qty: qty * bq, // แปลงชุดเป็นชิ้นจริง (จะคำนวณใหม่จาก server)
       bundles: qty,
       bundleQty: bq,
     };
@@ -292,23 +293,30 @@ async function submitOrder() {
         if (!doc.exists) throw new Error(`ไม่พบสินค้า ${cartItems[i].name}`);
 
         const serverData = doc.data();
-        const serverPromoValid = serverData.promoPrice != null && 
+        // ใช้ bundleQty จาก server เสมอ (ป้องกัน cart cache เก่า)
+        const serverBq = Number(serverData.bundleQty) || 1;
+        const actualQty = cartItems[i].bundles * serverBq;
+
+        const serverPromoValid = serverData.promoPrice != null &&
           (!serverData.promoExpiresAt || Date.now() < serverData.promoExpiresAt.toMillis());
         const serverPrice = serverPromoValid ? Number(serverData.promoPrice) : (Number(serverData.price) || 0);
         const serverStock = Number(serverData.stock) || 0;
 
-        if (serverStock < cartItems[i].qty) {
-          throw new Error(`${cartItems[i].name} เหลือแค่ ${serverStock} ชิ้น`);
+        if (serverStock < actualQty) {
+          const serverBundleCount = Math.floor(serverStock / serverBq);
+          throw new Error(`${cartItems[i].name} เหลือแค่ ${serverBq > 1 ? serverBundleCount + ' ชุด' : serverStock + ' ชิ้น'}`);
         }
 
-        const subtotal = serverPrice * cartItems[i].qty;
+        const subtotal = serverPrice * actualQty;
         rawTotalPrice += subtotal;
 
         orderItems.push({
           itemId: cartItems[i].itemId,
           name: cartItems[i].name,
           price: serverPrice,
-          qty: cartItems[i].qty,
+          qty: actualQty,
+          bundleQty: serverBq > 1 ? serverBq : undefined,
+          bundles: cartItems[i].bundles,
           subtotal,
         });
       }
@@ -329,7 +337,7 @@ async function submitOrder() {
       // หัก stock (stockHistory จะบันทึกตอน admin กดส่งของใน admin-orders.js)
       for (let i = 0; i < itemDocs.length; i++) {
         transaction.update(itemRefs[i], {
-          stock: firebase.firestore.FieldValue.increment(-cartItems[i].qty),
+          stock: firebase.firestore.FieldValue.increment(-orderItems[i].qty),
         });
       }
       

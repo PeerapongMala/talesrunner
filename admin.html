@@ -31,6 +31,7 @@
           />
         </div>
         <button class="btn-primary" id="passwordSubmit">เข้าสู่ระบบ</button>
+        <button class="btn-secondary" id="registerSubmit" style="margin-top:8px;width:100%;">สมัครใหม่ (ขอเข้าระบบ)</button>
         <p
           id="passwordError"
           style="
@@ -59,11 +60,9 @@
       <div class="admin-container">
         <!-- TABS -->
         <div class="admin-tabs">
-          <button class="nav-tab active" data-tab="orders">Order Board</button>
+          <button class="nav-tab active" data-tab="orders">Order Board <span class="order-noti-badge" id="orderNotiBadge" style="display:none;"></span></button>
           <button class="nav-tab" data-tab="products">จัดการสินค้า</button>
-          <button class="nav-tab" data-tab="bans">BAN List</button>
-          <button class="nav-tab" data-tab="coupons">ส่วนลด & รับเงิน</button>
-          <button class="nav-tab" data-tab="admins">บัญชีแอดมิน</button>
+          <button class="nav-tab" data-tab="settings">ตั้งค่า</button>
         </div>
 
         <!-- ORDER BOARD -->
@@ -95,13 +94,16 @@
             "
           >
             <h2>สินค้าทั้งหมด</h2>
-            <button
-              class="btn-primary"
-              id="openAddProductBtn"
-              style="width: auto; margin: 0; padding: 10px 24px"
-            >
-              + เพิ่มสินค้า
-            </button>
+            <div style="display:flex;gap:8px;">
+              <button class="btn-secondary" id="manageCategoriesBtn" style="width:auto;margin:0;padding:10px 18px;font-size:13px;">หมวดหมู่</button>
+              <button
+                class="btn-primary"
+                id="openAddProductBtn"
+                style="width: auto; margin: 0; padding: 10px 24px"
+              >
+                + เพิ่มสินค้า
+              </button>
+            </div>
           </div>
           <div id="adminStockToggles" class="admin-stock-toggles" style="display:none;"></div>
           <div id="ownerStockActions" style="display:none;justify-content:flex-end;gap:8px;margin-bottom:10px;">
@@ -133,18 +135,27 @@
           </table>
         </div>
 
-        <!-- BAN LIST -->
-        <div class="admin-section" id="bansSection">
-          <h2 style="margin-bottom: 15px">รายชื่อที่ถูก BAN</h2>
-          <div id="banList">
-            <p style="color: #aaa">กำลังโหลด...</p>
-          </div>
-        </div>
+        <!-- SETTINGS (รวม BAN + ส่วนลด + แอดมิน) -->
+        <div class="admin-section" id="settingsSection">
 
-        <!-- COUPONS & SETTINGS -->
-        <div class="admin-section" id="couponsSection">
-          <!-- คูปอง -->
-          <div class="coupon-section-card">
+          <!-- Sub-tabs -->
+          <div class="sub-tabs" id="settingsSubTabs">
+            <button class="sub-tab active" data-settab="bans">BAN List</button>
+            <button class="sub-tab owner-only" data-settab="coupons">คูปอง</button>
+            <button class="sub-tab owner-only" data-settab="promptpay">พร้อมเพย์</button>
+            <button class="sub-tab owner-only" data-settab="admins">แอดมิน</button>
+          </div>
+
+          <!-- BAN LIST -->
+          <div class="settings-card settings-sub active" id="bansCard">
+            <h2 style="margin-bottom: 15px">รายชื่อที่ถูก BAN</h2>
+            <div id="banList">
+              <p style="color: #aaa">กำลังโหลด...</p>
+            </div>
+          </div>
+
+          <!-- คูปอง (owner only) -->
+          <div class="settings-card settings-sub" id="couponsCard">
             <div class="coupon-section-header">
               <div>
                 <h2 class="coupon-section-title">คูปองส่วนลด</h2>
@@ -157,8 +168,8 @@
             </div>
           </div>
 
-          <!-- พร้อมเพย์ -->
-          <div class="coupon-section-card" style="margin-top:24px;">
+          <!-- พร้อมเพย์ (owner only) -->
+          <div class="settings-card settings-sub" id="promptpayCard">
             <div class="coupon-section-header">
               <div>
                 <h2 class="coupon-section-title">บัญชีรับเงิน (PromptPay)</h2>
@@ -172,45 +183,46 @@
             </div>
             <p class="field-error" id="ppSettingError"></p>
           </div>
-        </div>
 
-        <!-- ADMINS MANAGEMENT -->
-        <div class="admin-section" id="adminsSection">
-          <h2 style="margin-bottom: 15px">ตั้งค่าผู้ดูแลระบบ (Admin Roles)</h2>
-          
-          <div style="background: rgba(0,0,0,0.2); padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-            <h3 style="color:#4CAF50; margin-top:0;">แอดมินปัจจุบันในระบบ</h3>
-            <table class="admin-table" style="table-layout: fixed;">
-              <thead>
-                <tr>
-                  <th style="width: 30%;">อีเมล</th>
-                  <th style="width: 20%;">ชื่อ (ระบบ)</th>
-                  <th style="width: 25%;">ชื่อแสดงผล</th>
-                  <th style="width: 25%; text-align: center;">จัดการ</th>
-                </tr>
-              </thead>
-              <tbody id="currentAdminsList">
-                <tr><td colspan="4" style="text-align:center;color:#aaa;">กำลังโหลด...</td></tr>
-              </tbody>
-            </table>
+          <!-- แอดมิน (owner only) -->
+          <div class="settings-card settings-sub" id="adminsCard">
+            <h2 style="margin-bottom: 15px">ผู้ดูแลระบบ (Admin Roles)</h2>
+
+            <div style="background: rgba(0,0,0,0.2); padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+              <h3 style="color:#4CAF50; margin-top:0;">แอดมินปัจจุบันในระบบ</h3>
+              <table class="admin-table" style="table-layout: fixed;">
+                <thead>
+                  <tr>
+                    <th style="width: 30%;">อีเมล</th>
+                    <th style="width: 20%;">ชื่อ (ระบบ)</th>
+                    <th style="width: 25%;">ชื่อแสดงผล</th>
+                    <th style="width: 25%; text-align: center;">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="currentAdminsList">
+                  <tr><td colspan="4" style="text-align:center;color:#aaa;">กำลังโหลด...</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style="background: rgba(0,0,0,0.2); border: 1px solid #555; padding: 20px; border-radius: 8px;">
+              <h3 style="color:#e0b0ff; margin-top:0;">คำขอเข้าระบบ</h3>
+              <p style="color:#aaa; font-size:13px; margin-bottom:15px;">เมื่อคุณเอาอีเมลไปสมัครสมาชิกหรือพยายามเข้าสู่ระบบหน้านี้ ชื่อจะมาโผล่ที่นี่ (รอการอนุมัติสิทธิ์แอดมินจากเจ้าของร้าน)</p>
+              <table class="admin-table" style="table-layout: fixed;">
+                <thead>
+                  <tr>
+                    <th style="width: 40%;">อีเมล / ชื่อ</th>
+                    <th style="width: 30%;">เวลาที่พยายามเข้า</th>
+                    <th style="width: 30%; text-align: center;">ให้สิทธิ์แอดมิน</th>
+                  </tr>
+                </thead>
+                <tbody id="pendingAdminsList">
+                  <tr><td colspan="3" style="text-align:center;color:#aaa;">กำลังโหลด...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div style="background: rgba(0,0,0,0.2); border: 1px solid #555; padding: 20px; border-radius: 8px;">
-            <h3 style="color:#e0b0ff; margin-top:0;">📥 คำขอเข้าระบบ / คนที่พยายามล็อคอิน</h3>
-            <p style="color:#aaa; font-size:13px; margin-bottom:15px;">เมื่อคุณเอาอีเมลไปสมัครสมาชิกหรือพยายามเข้าสู่ระบบหน้านี้ ชื่อจะมาโผล่ที่นี่ (รอการอนุมัติสิทธิ์แอดมินจากเจ้าของร้าน)</p>
-            <table class="admin-table" style="table-layout: fixed;">
-              <thead>
-                <tr>
-                  <th style="width: 40%;">อีเมล / ชื่อ</th>
-                  <th style="width: 30%;">เวลาที่พยายามเข้า</th>
-                  <th style="width: 30%; text-align: center;">ให้สิทธิ์แอดมิน</th>
-                </tr>
-              </thead>
-              <tbody id="pendingAdminsList">
-                <tr><td colspan="3" style="text-align:center;color:#aaa;">กำลังโหลด...</td></tr>
-              </tbody>
-            </table>
-          </div>
         </div>
 
       </div>
@@ -279,6 +291,10 @@
           <input type="number" id="editBundleQty" min="1" placeholder="1" />
         </div>
         <div class="form-group">
+          <label>หมวดหมู่</label>
+          <div id="editProductCategories" class="category-checkbox-list"></div>
+        </div>
+        <div class="form-group">
           <label>รูปสินค้า</label>
           <div class="image-upload-area" id="editImageUploadArea">
             <img
@@ -338,6 +354,10 @@
         <div class="form-group">
           <label for="pBundleQty">ขายเป็นชุด (ชิ้น/ชุด) <span style="color:#aaa;font-size:12px;">ว่าง = ขายทีละชิ้น</span></label>
           <input type="number" id="pBundleQty" min="1" placeholder="1" />
+        </div>
+        <div class="form-group">
+          <label>หมวดหมู่</label>
+          <div id="addProductCategories" class="category-checkbox-list"></div>
         </div>
         <div class="form-group">
           <label>รูปสินค้า</label>
@@ -418,6 +438,62 @@
         <div class="modal-buttons" style="margin-top:20px;">
           <button class="btn-secondary" id="cancelAddCouponBtn">ยกเลิก</button>
           <button class="btn-primary" id="confirmAddCouponBtn">สร้างคูปอง</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CATEGORY MANAGEMENT MODAL -->
+    <div class="modal-overlay" id="categoryModal">
+      <div class="modal" style="max-width: 500px;">
+        <h2>จัดการหมวดหมู่</h2>
+        <div class="category-add-row">
+          <input type="text" id="newCategoryName" placeholder="ชื่อหมวดหมู่ใหม่" maxlength="50" />
+          <button class="btn-primary" id="addCategoryBtn">+ เพิ่ม</button>
+        </div>
+        <div id="categoryList" style="max-height:350px;overflow-y:auto;"></div>
+        <div class="modal-buttons" style="justify-content:center;margin-top:15px;">
+          <button class="btn-secondary" id="closeCategoryModalBtn">ปิด</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PICK ROLE MODAL -->
+    <div class="modal-overlay" id="pickRoleModal">
+      <div class="modal" style="max-width: 420px; text-align: center;">
+        <h2>เลือก Role</h2>
+        <p style="color:#aaa;font-size:13px;margin-bottom:16px;">กำหนดสิทธิ์ให้ <strong id="pickRoleEmail" style="color:#ff69b4;"></strong></p>
+        <div class="shop-state-buttons">
+          <button class="btn-shop-mode force-open" id="btnRoleAdmin">แอดมิน<br><span>(เห็นสินค้าทั้งหมด จัดการ order ได้ทุก order)</span></button>
+          <button class="btn-shop-mode auto" id="btnRoleExternal">แอดมินภายนอก<br><span>(เห็นเฉพาะสินค้าตัวเอง + order ที่มีสินค้าตัวเอง)</span></button>
+        </div>
+        <button class="btn-secondary" id="cancelPickRoleBtn" style="width:100%;">ยกเลิก</button>
+      </div>
+    </div>
+
+    <!-- RENAME CATEGORY MODAL -->
+    <div class="modal-overlay" id="renameCategoryModal">
+      <div class="modal" style="max-width: 400px;">
+        <h2>เปลี่ยนชื่อหมวดหมู่</h2>
+        <div class="form-group">
+          <label for="renameCategoryInput">ชื่อใหม่</label>
+          <input type="text" id="renameCategoryInput" placeholder="ชื่อหมวดหมู่" maxlength="50" />
+        </div>
+        <div class="modal-buttons">
+          <button class="btn-secondary" id="cancelRenameCategoryBtn">ยกเลิก</button>
+          <button class="btn-primary" id="confirmRenameCategoryBtn">บันทึก</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BULK ASSIGN MODAL -->
+    <div class="modal-overlay" id="bulkAssignModal">
+      <div class="modal" style="max-width: 520px;">
+        <h2>จัดการสินค้าในหมวด <span id="bulkAssignCatName" style="color:#ff69b4;"></span></h2>
+        <p style="color:#aaa;font-size:13px;margin-bottom:12px;">ติ๊กสินค้าที่ต้องการให้อยู่ในหมวดนี้</p>
+        <div id="bulkAssignList" style="max-height:400px;overflow-y:auto;"></div>
+        <div class="modal-buttons" style="margin-top:15px;">
+          <button class="btn-secondary" id="cancelBulkAssignBtn">ยกเลิก</button>
+          <button class="btn-primary" id="confirmBulkAssignBtn">บันทึก</button>
         </div>
       </div>
     </div>
