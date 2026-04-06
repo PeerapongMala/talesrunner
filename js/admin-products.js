@@ -1,6 +1,9 @@
 // ============ HELPER: เช็คว่าสินค้าเป็นของ admin คนนี้ ============
 function isMyProduct(item) {
   if (!currentAdminName) return false;
+  // 1) owner แชร์ให้ external เห็น
+  if (item.sharedWithExternal) return true;
+  // 2) ตัวเองมี adminStock > 0
   const aliases = typeof getAdminAliases === 'function' ? getAdminAliases(currentAdminName) : [currentAdminName];
   const adminStockMap = item.adminStock || {};
   for (const alias of aliases) {
@@ -74,6 +77,7 @@ function processProductSnapshot(snapshot) {
           <td style="text-align:center;"><div class="stock-btn-group"><button class="btn-stock-add" data-action="addStock" data-id="${item.id}" data-name="${escapeHtml(item.name)}">+</button><button class="btn-stock-reduce" data-action="reduceStock" data-id="${item.id}" data-name="${escapeHtml(item.name)}">-</button></div></td>
           <td style="text-align:center;"><button class="btn-icon" data-action="stockHistory" data-id="${item.id}" data-name="${escapeHtml(item.name)}">&#128065;</button></td>
           <td style="text-align:center;white-space:nowrap;">
+            ${isOwner ? `<button class="btn-icon" data-action="toggleShare" data-id="${item.id}" data-shared="${!!item.sharedWithExternal}" title="${item.sharedWithExternal ? 'ยกเลิกแชร์กับภายนอก' : 'แชร์ให้แอดมินภายนอกเห็น'}" style="color:${item.sharedWithExternal ? '#ff9800' : '#555'}; font-size:13px;">${item.sharedWithExternal ? '🔗' : '🔒'}</button>` : ''}
             <button class="btn-icon" data-action="toggleActive" data-id="${item.id}" data-active="${isActive}" title="${isActive ? 'ปิดสินค้า' : 'เปิดสินค้า'}" style="color:${isActive ? '#4CAF50' : '#ff4444'}">${isActive ? '👁' : '🚫'}</button>
             <button class="btn-icon" data-action="edit" data-id="${item.id}" data-name="${escapeHtml(item.name)}" data-price="${Number(item.price) || 0}" data-image="${escapeHtml(item.image || '')}" title="แก้ไข"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
             <button class="btn-icon btn-icon-danger" data-action="delete" data-id="${item.id}" title="ลบ"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
@@ -931,6 +935,16 @@ async function confirmEditProduct() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'บันทึก';
+  }
+}
+
+// ============ TOGGLE SHARE WITH EXTERNAL ============
+async function toggleShareExternal(itemId, currentShared) {
+  try {
+    await db.collection('items').doc(itemId).update({ sharedWithExternal: !currentShared });
+    showToast(!currentShared ? 'แชร์สินค้าให้แอดมินภายนอกเห็นแล้ว' : 'ยกเลิกแชร์กับแอดมินภายนอกแล้ว');
+  } catch (e) {
+    showAlert('เปลี่ยนสถานะไม่ได้: ' + e.message, 'ผิดพลาด');
   }
 }
 
