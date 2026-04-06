@@ -139,6 +139,13 @@ function setupLogin() {
         } else {
           const ownerActions = document.getElementById('ownerStockActions');
           if (ownerActions) ownerActions.style.display = 'flex';
+          // Owner: quota badge เป็นลิงก์ไป Firebase Console
+          const quotaEl = document.getElementById('quotaInfo');
+          if (quotaEl) {
+            quotaEl.style.cursor = 'pointer';
+            quotaEl.title = 'ดู Usage ใน Firebase Console';
+            quotaEl.addEventListener('click', () => window.open('https://console.firebase.google.com/project/telesrunner-afab6/usage', '_blank'));
+          }
         }
         if (isExternal) {
           // external ซ่อน tab ตั้งค่า, ปุ่ม shop toggle, pay mode
@@ -171,7 +178,6 @@ function setupLogin() {
         if (typeof loadCoupons === 'function') loadCoupons();
         if (typeof loadAdminRoles === 'function') loadAdminRoles();
         if (typeof loadPendingItems === 'function') loadPendingItems();
-        startQuotaResetCountdown();
       } catch (err) {
         // Permission Denied แปลว่าไม่ใช่แอดมิน
         console.warn('Not an admin:', err.message);
@@ -606,28 +612,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
 });
 
-// ============ QUOTA RESET COUNTDOWN (header) ============
-let _headerQuotaTimer = null;
-
-function startQuotaResetCountdown() {
-  const el = document.getElementById('quotaResetCountdown');
-  if (!el) return;
-
-  function update() {
-    const target = typeof getNextQuotaReset === 'function' ? getNextQuotaReset() : 0;
-    if (!target) { el.textContent = '--:--:--'; return; }
-    const remain = target - Date.now();
-    if (remain <= 0) {
-      el.textContent = 'Reset!';
-      el.style.color = '#76ff03';
-    } else {
-      const h = Math.floor(remain / 3600000).toString().padStart(2, '0');
-      const m = Math.floor((remain % 3600000) / 60000).toString().padStart(2, '0');
-      const s = Math.floor((remain % 60000) / 1000).toString().padStart(2, '0');
-      el.textContent = `${h}:${m}:${s}`;
-    }
-  }
-  update();
-  if (_headerQuotaTimer) clearInterval(_headerQuotaTimer);
-  _headerQuotaTimer = setInterval(update, 1000);
-}

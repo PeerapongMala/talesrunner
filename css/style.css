@@ -222,29 +222,39 @@ body {
 
 .quota-info {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 1px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: rgba(255, 152, 0, 0.1);
-  border: 1px solid rgba(255, 152, 0, 0.3);
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-family: 'Kanit', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
   text-decoration: none;
-  transition: background 0.2s;
+  white-space: nowrap;
+  transition: all 0.2s;
+  cursor: default;
 }
+.quota-info.quota-ok {
+  background: rgba(76, 175, 80, 0.2);
+  border: 2px solid rgba(76, 175, 80, 0.5);
+}
+.quota-info.quota-ok .quota-reset-label { color: #81c784; }
+.quota-info.quota-ok .quota-reset-time { color: #a5d6a7; font-weight: 600; }
+.quota-info.quota-error {
+  background: rgba(255, 152, 0, 0.2);
+  border: 2px solid rgba(255, 152, 0, 0.5);
+}
+.quota-info.quota-error .quota-reset-label { color: #ffb74d; }
+.quota-info.quota-error .quota-reset-time { color: #ffd54f; font-weight: 600; }
 .quota-info:hover {
-  background: rgba(255, 152, 0, 0.25);
+  filter: brightness(1.2);
 }
 .quota-reset-label {
-  font-size: 9px;
-  color: #ff9800;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: 13px;
 }
 .quota-reset-time {
   font-size: 13px;
   font-weight: 600;
-  color: #ffb74d;
   font-variant-numeric: tabular-nums;
 }
 
@@ -487,13 +497,15 @@ body {
 .pagination-btn {
   background: rgba(155, 77, 202, 0.3);
   color: #e0b0ff;
-  border: 1px solid rgba(155, 77, 202, 0.5);
-  padding: 8px 18px;
+  border: 2px solid rgba(155, 77, 202, 0.5);
+  padding: 8px 16px;
   border-radius: 8px;
   cursor: pointer;
   font-family: 'Kanit', sans-serif;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 500;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 .pagination-btn:hover:not(:disabled) {
   background: rgba(155, 77, 202, 0.6);
@@ -654,24 +666,30 @@ body {
 }
 .btn-pending-approve {
   background: rgba(76, 175, 80, 0.2);
-  border: 1px solid rgba(76, 175, 80, 0.5);
+  border: 2px solid rgba(76, 175, 80, 0.5);
   color: #4CAF50;
-  padding: 4px 12px;
+  padding: 5px 10px;
   border-radius: 6px;
+  font-family: 'Kanit', sans-serif;
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.2s;
 }
-.btn-pending-approve:hover { background: rgba(76, 175, 80, 0.35); }
+.btn-pending-approve:hover { background: rgba(76, 175, 80, 0.4); color: #fff; }
 .btn-pending-reject {
   background: rgba(244, 67, 54, 0.15);
-  border: 1px solid rgba(244, 67, 54, 0.4);
+  border: 2px solid rgba(244, 67, 54, 0.4);
   color: #f44336;
-  padding: 4px 12px;
+  padding: 5px 10px;
   border-radius: 6px;
+  font-family: 'Kanit', sans-serif;
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.2s;
 }
-.btn-pending-reject:hover { background: rgba(244, 67, 54, 0.3); }
+.btn-pending-reject:hover { background: rgba(244, 67, 54, 0.4); color: #fff; }
 
 /* ============ ADMIN RESERVATION PANEL ============ */
 .admin-reserve-panel {
@@ -898,13 +916,13 @@ body {
   padding: 14px;
   background: linear-gradient(135deg, #ff69b4, #9b4dca);
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   color: #fff;
   font-family: 'Kanit', sans-serif;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
   margin-top: 15px;
 }
 
@@ -927,8 +945,10 @@ body {
   color: #fff;
   font-family: 'Kanit', sans-serif;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .btn-secondary:hover {
@@ -936,14 +956,15 @@ body {
 }
 
 .btn-shop-toggle {
-  padding: 8px 18px;
-  border-radius: 20px;
+  padding: 8px 16px;
+  border-radius: 8px;
   font-family: 'Kanit', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
   border: 2px solid;
+  white-space: nowrap;
 }
 
 .btn-shop-toggle.open {
@@ -976,8 +997,10 @@ body {
   color: #ff4444;
   font-family: 'Kanit', sans-serif;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .btn-danger:hover {
@@ -991,8 +1014,9 @@ body {
   font-size: 12px;
   border-radius: 6px;
   font-family: 'Kanit', sans-serif;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
   border: 2px solid;
   white-space: nowrap;
 }
@@ -1025,13 +1049,13 @@ body {
 .btn-shop-mode {
   padding: 15px;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   color: #fff;
   font-family: 'Kanit', sans-serif;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
 }
 .btn-shop-mode span {
   font-size: 12px;
@@ -1167,7 +1191,7 @@ body {
   padding: 2px 3px;
   border-radius: 4px;
   opacity: 0.8;
-  transition: opacity 0.15s;
+  transition: all 0.2s;
 }
 .badge-btn:hover {
   opacity: 1;
@@ -1220,11 +1244,11 @@ body {
 
 /* ============ ORDER ACTION BUTTONS ============ */
 .btn-order-action {
-  padding: 6px 14px;
+  padding: 8px 16px;
   border-radius: 8px;
   font-family: 'Kanit', sans-serif;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
   border: 2px solid;
@@ -1529,10 +1553,10 @@ body {
   border-radius: 8px;
   cursor: pointer;
   font-family: 'Kanit', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
-  transition: all 0.3s;
+  transition: all 0.2s;
 }
 .btn-coupon-apply:hover {
   background: linear-gradient(135deg, #b366e0, #8040c0);
@@ -1543,16 +1567,16 @@ body {
 }
 .btn-coupon-cancel {
   padding: 0 16px;
-  background: rgba(255,68,68,0.08);
+  background: rgba(255,68,68,0.15);
   color: #ff6b6b;
-  border: 1px solid rgba(255,68,68,0.3);
+  border: 2px solid rgba(255,68,68,0.4);
   border-radius: 8px;
   cursor: pointer;
   font-family: 'Kanit', sans-serif;
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
-  transition: all 0.3s;
+  transition: all 0.2s;
 }
 .btn-coupon-cancel:hover {
   background: rgba(255,68,68,0.15);
@@ -2001,13 +2025,14 @@ body {
 }
 
 .btn-cancel-order {
-  padding: 6px 16px;
+  padding: 8px 16px;
   background: rgba(255, 68, 68, 0.15);
-  border: 1.5px solid #ff4444;
+  border: 2px solid #ff4444;
   border-radius: 8px;
   color: #ff4444;
   font-family: 'Kanit', sans-serif;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 }

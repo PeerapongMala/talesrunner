@@ -137,6 +137,26 @@ function showOrderToast(items, duration) {
 // ============ QUOTA SAVING MODE ============
 let _quotaBannerShown = false;
 let _quotaSaving = false; // true = ปิด listener ใช้ .get() แทน
+const QUOTA_STORAGE_KEY = 'quotaSavingUntil';
+
+// เช็คตอนโหลดหน้า — ถ้า localStorage บอกว่า quota ยังหมดอยู่ให้เข้า saving mode ทันที
+(function checkQuotaOnLoad() {
+  try {
+    const until = parseInt(localStorage.getItem(QUOTA_STORAGE_KEY) || '0');
+    if (until && Date.now() < until) {
+      _quotaSaving = true;
+      // รอ DOM พร้อมแล้วค่อย switch badge
+      const ready = () => { switchQuotaBadgeToError(); showQuotaBanner(); };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', ready);
+      } else {
+        ready();
+      }
+    } else if (until) {
+      localStorage.removeItem(QUOTA_STORAGE_KEY);
+    }
+  } catch(e) {}
+})();
 
 function isQuotaError(err) {
   if (!err) return false;
@@ -188,6 +208,52 @@ function formatQuotaCountdown(ms) {
 
 let _quotaResetTarget = 0;
 let _quotaCountdownTimer = null;
+let _quotaBadgeTimer = null;
+
+// เปลี่ยน quota badge (ทั้ง index + admin) เป็นโหมด error พร้อม countdown
+function switchQuotaBadgeToError() {
+  const info = document.getElementById('quotaInfo');
+  const label = info && info.querySelector('.quota-reset-label');
+  const time = document.getElementById('quotaResetCountdown');
+  if (!info || !time) return;
+
+  info.classList.remove('quota-ok');
+  info.classList.add('quota-error');
+  if (label) label.textContent = 'Quota หมด';
+
+  const target = getNextQuotaReset();
+
+  function tick() {
+    const remain = target - Date.now();
+    if (remain <= 0) {
+      time.textContent = 'Reset!';
+      time.style.color = '#76ff03';
+      clearInterval(_quotaBadgeTimer);
+    } else {
+      time.textContent = formatQuotaCountdown(remain);
+    }
+  }
+  tick();
+  if (_quotaBadgeTimer) clearInterval(_quotaBadgeTimer);
+  _quotaBadgeTimer = setInterval(tick, 1000);
+}
+
+// คืน quota badge กลับเป็นปกติ
+function restoreQuotaBadgeToOk() {
+  const info = document.getElementById('quotaInfo');
+  const label = info && info.querySelector('.quota-reset-label');
+  const time = document.getElementById('quotaResetCountdown');
+  if (!info || !time) return;
+
+  info.classList.remove('quota-error');
+  info.classList.add('quota-ok');
+  if (label) label.textContent = 'ระบบ';
+  time.textContent = 'ปกติ';
+  time.style.color = '';
+  if (_quotaBadgeTimer) { clearInterval(_quotaBadgeTimer); _quotaBadgeTimer = null; }
+  _quotaSaving = false;
+  try { localStorage.removeItem(QUOTA_STORAGE_KEY); } catch(e) {}
+}
 
 function showQuotaBanner() {
   if (_quotaBannerShown) return;
@@ -238,6 +304,8 @@ function enterQuotaSavingMode() {
   if (_quotaSaving) return;
   _quotaSaving = true;
   console.warn('[QUOTA] Entering saving mode — all listeners stopped');
+  // บันทึกลง localStorage — หมดอายุตอน quota reset
+  try { localStorage.setItem(QUOTA_STORAGE_KEY, String(getNextQuotaReset())); } catch(e) {}
 
   // ปิด listener ฝั่ง customer
   if (typeof window !== 'undefined') {
@@ -257,6 +325,10 @@ function enterQuotaSavingMode() {
   if (typeof unsubPendingAdmins !== 'undefined' && unsubPendingAdmins) { unsubPendingAdmins(); unsubPendingAdmins = null; }
   if (typeof unsubShopSettings !== 'undefined' && unsubShopSettings) { unsubShopSettings(); unsubShopSettings = null; }
   if (typeof unsubAdminReservations !== 'undefined' && unsubAdminReservations) { unsubAdminReservations(); unsubAdminReservations = null; }
+  if (typeof unsubPendingItems !== 'undefined' && unsubPendingItems) { unsubPendingItems(); unsubPendingItems = null; }
+
+  // เปลี่ยน quota badge เป็นโหมด error + countdown
+  switchQuotaBadgeToError();
 
   // พยายามปิดร้านอัตโนมัติ
   autoCloseShopOnQuota();
@@ -264,14 +336,18 @@ function enterQuotaSavingMode() {
   showQuotaBanner();
 }
 
-// ปิดร้านอัตโนมัติเมื่อ quota หมด
+// ปิดร้านอัตโนมัติเมื่อ quota หมด — บอกเวลาที่จะกลับมา
 async function autoCloseShopOnQuota() {
   try {
     if (typeof db === 'undefined') return;
+    const thaiHour = getQuotaResetThaiTime();
+    const resetTarget = getNextQuotaReset();
     await db.collection('settings').doc('shop').set({
       shopState: 'force_close',
       isOpen: false,
-      closeReason: 'ร้านปิดชั่วคราว (ระบบขัดข้อง)'
+      closeReason: `[QUOTA_CLOSE]`,
+      quotaResetAt: resetTarget,
+      quotaResetHour: thaiHour
     }, { merge: true });
     console.warn('[QUOTA] Auto-closed shop due to quota exhaustion');
   } catch (e) {
