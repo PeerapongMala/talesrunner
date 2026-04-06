@@ -220,6 +220,34 @@ body {
   color: #fff;
 }
 
+.quota-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 152, 0, 0.1);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  text-decoration: none;
+  transition: background 0.2s;
+}
+.quota-info:hover {
+  background: rgba(255, 152, 0, 0.25);
+}
+.quota-reset-label {
+  font-size: 9px;
+  color: #ff9800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.quota-reset-time {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffb74d;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ============ MAIN LAYOUT ============ */
 .main-container {
   display: flex;
