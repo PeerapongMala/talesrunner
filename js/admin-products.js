@@ -803,38 +803,46 @@ async function addProduct() {
   btn.textContent = 'กำลังเพิ่ม...';
 
   try {
-    // สร้าง ID ล่วงหน้าเพื่อใช้ batch ได้
-    const docRef = db.collection('items').doc();
-    const batch = db.batch();
-    const maxSort = allProducts.reduce((max, p) => Math.max(max, p.sortOrder ?? 0), -1);
     const bundleQty = parseInt(document.getElementById('pBundleQty').value) || 0;
+    const selectedCats = getSelectedCategories('addProductCategories');
     const newItem = {
       name,
       price,
       stock,
       image: addImageBase64,
-      sortOrder: maxSort + 1,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     if (bundleQty > 1) newItem.bundleQty = bundleQty;
-    const selectedCats = getSelectedCategories('addProductCategories');
     if (selectedCats.length > 0) newItem.categories = selectedCats;
     if (stock > 0 && addedBy) {
       newItem.adminStock = { [addedBy]: stock };
     }
-    batch.set(docRef, newItem);
 
-    // บันทึกประวัติ stock ครั้งแรก (atomic)
-    if (stock > 0) {
-      batch.set(docRef.collection('stockHistory').doc(), {
-        qty: stock,
-        addedBy: addedBy,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+    // External admin → ส่งรออนุมัติ
+    if (isExternal) {
+      newItem.submittedBy = currentAdminName;
+      await db.collection('pending_items').doc().set(newItem);
+      closeAddProductModal();
+      showToast('ส่งสินค้ารอ Owner อนุมัติแล้ว');
+    } else {
+      // Owner / Admin → เพิ่มตรงเลย
+      const docRef = db.collection('items').doc();
+      const batch = db.batch();
+      const maxSort = allProducts.reduce((max, p) => Math.max(max, p.sortOrder ?? 0), -1);
+      newItem.sortOrder = maxSort + 1;
+      batch.set(docRef, newItem);
+
+      if (stock > 0) {
+        batch.set(docRef.collection('stockHistory').doc(), {
+          qty: stock,
+          addedBy: addedBy,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+
+      await batch.commit();
+      closeAddProductModal();
     }
-
-    await batch.commit();
-    closeAddProductModal();
   } catch (e) {
     showAlert('เพิ่มสินค้าไม่ได้: ' + e.message, 'ผิดพลาด');
   } finally {
@@ -1323,6 +1331,93 @@ async function confirmBulkAssign() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'บันทึก';
+  }
+}
+
+// ============ PENDING ITEMS (Owner Approval) ============
+let unsubPendingItems = null;
+
+function loadPendingItems() {
+  if (!isOwner) return;
+  if (unsubPendingItems) { unsubPendingItems(); unsubPendingItems = null; }
+
+  unsubPendingItems = db.collection('pending_items').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+    renderPendingItems(snapshot.docs);
+  }, e => {
+    console.warn('pending_items listener:', e.message);
+  });
+}
+
+function renderPendingItems(docs) {
+  const container = document.getElementById('pendingItemsPanel');
+  if (!container) return;
+
+  if (docs.length === 0) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  container.style.display = 'block';
+  container.innerHTML = `
+    <div class="pending-items-header">สินค้ารออนุมัติ (${docs.length})</div>
+    ${docs.map(doc => {
+      const d = doc.data();
+      const bqText = d.bundleQty > 1 ? ` (ชุดละ ${d.bundleQty})` : '';
+      return `
+        <div class="pending-item-card">
+          <img src="${escapeHtml(d.image || '')}" class="pending-item-img" onerror="this.style.display='none'">
+          <div class="pending-item-info">
+            <div class="pending-item-name">${escapeHtml(d.name)}${bqText}</div>
+            <div class="pending-item-detail">${formatPrice(d.price)} บาท · stock ${d.stock || 0} · โดย ${escapeHtml(d.submittedBy || '?')}</div>
+          </div>
+          <div class="pending-item-actions">
+            <button class="btn-pending-approve" data-pending-id="${doc.id}">อนุมัติ</button>
+            <button class="btn-pending-reject" data-pending-id="${doc.id}">ปฏิเสธ</button>
+          </div>
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+async function approvePendingItem(pendingId) {
+  try {
+    const doc = await db.collection('pending_items').doc(pendingId).get();
+    if (!doc.exists) return;
+    const data = doc.data();
+    delete data.submittedBy;
+
+    const docRef = db.collection('items').doc();
+    const batch = db.batch();
+    const maxSort = allProducts.reduce((max, p) => Math.max(max, p.sortOrder ?? 0), -1);
+    data.sortOrder = maxSort + 1;
+    batch.set(docRef, data);
+
+    if ((data.stock || 0) > 0) {
+      const addedBy = Object.keys(data.adminStock || {})[0] || 'unknown';
+      batch.set(docRef.collection('stockHistory').doc(), {
+        qty: data.stock,
+        addedBy,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    batch.delete(db.collection('pending_items').doc(pendingId));
+    await batch.commit();
+    showToast('อนุมัติสินค้า "' + (data.name || '') + '" แล้ว');
+  } catch (e) {
+    showAlert('อนุมัติไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+async function rejectPendingItem(pendingId) {
+  if (!await showConfirm('ปฏิเสธสินค้านี้?', 'ยืนยัน')) return;
+  try {
+    await db.collection('pending_items').doc(pendingId).delete();
+    showToast('ปฏิเสธสินค้าแล้ว');
+  } catch (e) {
+    showAlert('ปฏิเสธไม่ได้: ' + e.message, 'ผิดพลาด');
   }
 }
 

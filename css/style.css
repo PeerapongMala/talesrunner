@@ -579,6 +579,72 @@ body {
   white-space: nowrap;
 }
 
+/* ============ PENDING ITEMS PANEL ============ */
+.pending-items-header {
+  color: #e0b0ff;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+.pending-item-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: rgba(224, 176, 255, 0.06);
+  border: 1px solid rgba(224, 176, 255, 0.2);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.pending-item-img {
+  width: 50px;
+  height: 50px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.pending-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.pending-item-name {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pending-item-detail {
+  color: #aaa;
+  font-size: 11px;
+  margin-top: 2px;
+}
+.pending-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-pending-approve {
+  background: rgba(76, 175, 80, 0.2);
+  border: 1px solid rgba(76, 175, 80, 0.5);
+  color: #4CAF50;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn-pending-approve:hover { background: rgba(76, 175, 80, 0.35); }
+.btn-pending-reject {
+  background: rgba(244, 67, 54, 0.15);
+  border: 1px solid rgba(244, 67, 54, 0.4);
+  color: #f44336;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn-pending-reject:hover { background: rgba(244, 67, 54, 0.3); }
+
 /* ============ ADMIN RESERVATION PANEL ============ */
 .admin-reserve-panel {
   background: rgba(255, 152, 0, 0.08);

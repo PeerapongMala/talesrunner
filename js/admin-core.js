@@ -170,6 +170,7 @@ function setupLogin() {
         if (typeof setupPayModeToggle === 'function') setupPayModeToggle();
         if (typeof loadCoupons === 'function') loadCoupons();
         if (typeof loadAdminRoles === 'function') loadAdminRoles();
+        if (typeof loadPendingItems === 'function') loadPendingItems();
       } catch (err) {
         // Permission Denied แปลว่าไม่ใช่แอดมิน
         console.warn('Not an admin:', err.message);
@@ -530,6 +531,14 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (action === 'delete') deleteProduct(id);
   });
 
+  // Event delegation สำหรับ pending items (owner approve/reject)
+  document.getElementById('pendingItemsPanel').addEventListener('click', (e) => {
+    const approveBtn = e.target.closest('.btn-pending-approve');
+    if (approveBtn) return approvePendingItem(approveBtn.dataset.pendingId);
+    const rejectBtn = e.target.closest('.btn-pending-reject');
+    if (rejectBtn) return rejectPendingItem(rejectBtn.dataset.pendingId);
+  });
+
   // Event delegation สำหรับ order board
   document.getElementById('orderBoard').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
@@ -567,6 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof unsubAdminStock !== 'undefined' && unsubAdminStock) { unsubAdminStock(); unsubAdminStock = null; }
       if (typeof unsubShopSettings !== 'undefined' && unsubShopSettings) { unsubShopSettings(); unsubShopSettings = null; }
       if (typeof unsubAdminReservations !== 'undefined' && unsubAdminReservations) { unsubAdminReservations(); unsubAdminReservations = null; }
+      if (typeof unsubPendingItems !== 'undefined' && unsubPendingItems) { unsubPendingItems(); unsubPendingItems = null; }
     } else {
       if (currentAdminName) {
         if (!unsubOrders) loadOrders();
@@ -576,6 +586,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof unsubAdmins !== 'undefined' && !unsubAdmins) loadAdminRoles();
         if (typeof unsubShopSettings !== 'undefined' && !unsubShopSettings && typeof listenShopToggle === 'function') listenShopToggle();
         if (typeof unsubAdminReservations !== 'undefined' && !unsubAdminReservations && typeof loadAdminReservations === 'function') loadAdminReservations();
+        if (typeof unsubPendingItems !== 'undefined' && !unsubPendingItems && typeof loadPendingItems === 'function') loadPendingItems();
       }
     }
   });
