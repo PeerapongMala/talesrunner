@@ -78,13 +78,11 @@ function processProductSnapshot(snapshot) {
               </span>
             </div>
           </td>
-          <td style="text-align:center;">
-            ${formatPrice(item.price)} บาท
-            ${isExternal && typeof calcExternalCut === 'function' ? (() => { const ec = item.externalCut || calcExternalCut(item.price); return `<div style="font-size:10px;color:#4CAF50;margin-top:2px;">คุณได้ ${formatPrice(ec)} ฿</div>`; })() : ''}
-          </td>
+          <td style="text-align:center;">${formatPrice(item.price)} บาท</td>
           <td style="text-align:center;">
             ${isOwner ? `<input type="number" step="any" min="0" class="promo-input" data-action="promo" data-id="${item.id}" data-external-cut="${item.externalCut || 0}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-">` : `<span style="color:#ff9800;">${item.promoPrice != null ? formatPrice(item.promoPrice) : '-'}</span>`}
-            ${item.externalCut ? (() => { const ec = item.externalCut; const sellPrice = item.promoPrice != null ? item.promoPrice : item.price; const ownerNet = sellPrice - ec; return `<div style="font-size:10px;color:#aaa;margin-top:2px;">แอดนอก ${formatPrice(ec)} ฿ · Owner ${formatPrice(ownerNet)} ฿${ownerNet < 0 ? ' <span style="color:#ff4444;">ขาดทุน!</span>' : ''}</div>`; })() : ''}
+            ${isOwner && item.externalCut ? (() => { const ec = item.externalCut; const sellPrice = item.promoPrice != null ? item.promoPrice : item.price; const ownerNet = sellPrice - ec; return `<div style="font-size:10px;color:#aaa;margin-top:2px;">แอดนอก ${formatPrice(ec)} ฿ · Owner ${formatPrice(ownerNet)} ฿${ownerNet < 0 ? ' <span style="color:#ff4444;">ขาดทุน!</span>' : ''}</div>`; })() : ''}
+            ${isExternal && typeof calcExternalCut === 'function' ? (() => { const sellPrice = item.promoPrice != null ? item.promoPrice : item.price; const ec = item.externalCut || calcExternalCut(sellPrice); return `<div style="font-size:10px;color:#4CAF50;margin-top:2px;">คุณได้ ${formatPrice(ec)} ฿</div>`; })() : ''}
           </td>
           <td style="font-weight:600;text-align:center;">${Number(item.stock) || 0}</td>
           <td style="text-align:center;color:#4fc3f7;">${Number(item.soldCount) || 0}</td>
