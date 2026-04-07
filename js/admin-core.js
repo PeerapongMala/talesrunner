@@ -181,6 +181,8 @@ function setupLogin() {
         if (typeof loadAdminRoles === 'function') loadAdminRoles();
         if (typeof loadPendingItems === 'function') loadPendingItems();
         if (typeof loadPendingDeletes === 'function') loadPendingDeletes();
+        if (typeof loadCommissionTiers === 'function') loadCommissionTiers();
+        if (typeof setupCommissionTiers === 'function') setupCommissionTiers();
       } catch (err) {
         // Permission Denied แปลว่าไม่ใช่แอดมิน
         console.warn('Not an admin:', err.message);
@@ -515,6 +517,15 @@ document.addEventListener('DOMContentLoaded', () => {
         updateData.promoPrice = promo;
         // ตั้งเวลาหมดอายุตรงกับเวลาร้านปิด
         updateData.promoExpiresAt = firebase.firestore.Timestamp.fromDate(getNextCloseTime());
+      }
+
+      // เตือนถ้าราคาโปร < externalCut (owner ขาดทุน)
+      const externalCut = parseFloat(e.target.dataset.externalCut) || 0;
+      if (externalCut > 0 && val !== '') {
+        const promo = parseFloat(val);
+        if (!isNaN(promo) && promo < externalCut) {
+          showAlert(`ราคาโปร ${promo} ฿ ต่ำกว่าส่วนแบ่งแอดนอก ${externalCut} ฿\nOwner จะขาดทุน ${formatPrice(externalCut - promo)} ฿ ต่อชิ้น`, 'คำเตือน');
+        }
       }
 
       db.collection('items').doc(id).update(updateData)

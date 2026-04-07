@@ -78,8 +78,14 @@ function processProductSnapshot(snapshot) {
               </span>
             </div>
           </td>
-          <td style="text-align:center;">${formatPrice(item.price)} บาท</td>
-          <td style="text-align:center;">${isOwner ? `<input type="number" step="any" min="0" class="promo-input" data-action="promo" data-id="${item.id}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-">` : `<span style="color:#ff9800;">${item.promoPrice != null ? formatPrice(item.promoPrice) : '-'}</span>`}</td>
+          <td style="text-align:center;">
+            ${formatPrice(item.price)} บาท
+            ${isExternal && typeof calcExternalCut === 'function' ? (() => { const ec = item.externalCut || calcExternalCut(item.price); return `<div style="font-size:10px;color:#4CAF50;margin-top:2px;">คุณได้ ${formatPrice(ec)} ฿</div>`; })() : ''}
+          </td>
+          <td style="text-align:center;">
+            ${isOwner ? `<input type="number" step="any" min="0" class="promo-input" data-action="promo" data-id="${item.id}" data-external-cut="${item.externalCut || 0}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-">` : `<span style="color:#ff9800;">${item.promoPrice != null ? formatPrice(item.promoPrice) : '-'}</span>`}
+            ${item.externalCut ? (() => { const ec = item.externalCut; const sellPrice = item.promoPrice != null ? item.promoPrice : item.price; const ownerNet = sellPrice - ec; return `<div style="font-size:10px;color:#aaa;margin-top:2px;">แอดนอก ${formatPrice(ec)} ฿ · Owner ${formatPrice(ownerNet)} ฿${ownerNet < 0 ? ' <span style="color:#ff4444;">ขาดทุน!</span>' : ''}</div>`; })() : ''}
+          </td>
           <td style="font-weight:600;text-align:center;">${Number(item.stock) || 0}</td>
           <td style="text-align:center;color:#4fc3f7;">${Number(item.soldCount) || 0}</td>
           <td style="text-align:center;"><div class="stock-btn-group"><button class="btn-stock-add" data-action="addStock" data-id="${item.id}" data-name="${escapeHtml(item.name)}">+</button><button class="btn-stock-reduce" data-action="reduceStock" data-id="${item.id}" data-name="${escapeHtml(item.name)}">-</button></div></td>
@@ -148,9 +154,19 @@ async function flushStockAccum(itemId, itemName) {
       const itemDoc = await transaction.get(itemRef);
       if (!itemDoc.exists) throw new Error('ไม่พบสินค้า');
 
-      const currentStock = Number(itemDoc.data().stock) || 0;
+      const data = itemDoc.data();
+      const currentStock = Number(data.stock) || 0;
       if (delta < 0 && currentStock + delta < 0) {
         throw new Error('stock ไม่พอ (เหลือ ' + currentStock + ')');
+      }
+      // เช็ค adminStock ไม่ให้ติดลบ
+      if (delta < 0) {
+        const myStock = typeof getAdminStockValue === 'function'
+          ? getAdminStockValue(data.adminStock || {}, currentAdminName)
+          : (Number((data.adminStock || {})[currentAdminName]) || 0);
+        if (myStock + delta < 0) {
+          throw new Error('stock ของคุณมีแค่ ' + myStock);
+        }
       }
 
       transaction.set(itemRef, {
@@ -256,8 +272,14 @@ async function confirmAddStock() {
       if (!itemDoc.exists) throw new Error('ไม่พบสินค้า');
 
       if (isReduce) {
-        const currentStock = Number(itemDoc.data().stock) || 0;
-        if (qty > currentStock) throw new Error(`stock มีแค่ ${currentStock} ลดไม่ได้`);
+        const data = itemDoc.data();
+        const currentStock = Number(data.stock) || 0;
+        if (qty > currentStock) throw new Error(`stock รวมมีแค่ ${currentStock} ลดไม่ได้`);
+        // เช็ค adminStock ของคนที่ลดไม่ให้ติดลบ
+        const adminStockVal = typeof getAdminStockValue === 'function'
+          ? getAdminStockValue(data.adminStock || {}, addedBy)
+          : (Number((data.adminStock || {})[addedBy]) || 0);
+        if (qty > adminStockVal) throw new Error(`stock ของ ${addedBy} มีแค่ ${adminStockVal} ลดไม่ได้`);
       }
 
       transaction.set(itemRef, {
@@ -826,6 +848,10 @@ async function addProduct() {
 
     // External admin → ส่งรออนุมัติ
     if (isExternal) {
+      // คำนวณ externalCut จาก tier อัตโนมัติ
+      if (typeof calcExternalCut === 'function') {
+        newItem.externalCut = calcExternalCut(price);
+      }
       newItem.submittedBy = currentAdminName;
       await db.collection('pending_items').doc().set(newItem);
       closeAddProductModal();
@@ -870,6 +896,32 @@ function openAddProductModal() {
   document.getElementById('addImagePreview').style.display = 'none';
   document.getElementById('addImageUploadText').textContent = 'คลิกเพื่อเลือกรูป';
   renderCategoryCheckboxes('addProductCategories', []);
+
+  // แสดง preview ส่วนแบ่งสำหรับแอดนอก (คำนวณจาก tier อัตโนมัติ)
+  const ecGroup = document.getElementById('externalCutGroup');
+  const ecPreview = document.getElementById('externalCutPreview');
+  if (ecGroup) {
+    if (isExternal && typeof calcExternalCut === 'function') {
+      ecGroup.style.display = '';
+      if (ecPreview) ecPreview.textContent = '';
+      const updatePreview = () => {
+        const price = parseFloat(document.getElementById('pPrice').value) || 0;
+        if (price > 0) {
+          const extCut = calcExternalCut(price);
+          const ownerGets = price - extCut;
+          const pct = Math.round((extCut / price) * 100);
+          ecPreview.innerHTML = `ราคาขาย ${price} ฿ → คุณได้ <span style="color:#4CAF50;font-weight:600;">${extCut} ฿ (${pct}%)</span> · Owner ได้ <span style="color:#e0b0ff;">${ownerGets} ฿</span>`;
+        } else {
+          ecPreview.textContent = 'กรอกราคาเพื่อดู preview';
+        }
+      };
+      document.getElementById('pPrice').oninput = updatePreview;
+      updatePreview();
+    } else {
+      ecGroup.style.display = 'none';
+    }
+  }
+
   document.getElementById('addProductModal').classList.add('active');
 }
 
@@ -1412,6 +1464,7 @@ function renderPendingItems(docs) {
           <div class="pending-item-info">
             <div class="pending-item-name">${escapeHtml(d.name)}${bqText}</div>
             <div class="pending-item-detail">${formatPrice(d.price)} บาท · stock ${d.stock || 0} · โดย ${escapeHtml(d.submittedBy || '?')}</div>
+            ${d.externalCut ? `<div style="font-size:11px;margin-top:2px;color:#ff9800;">ส่วนแบ่ง: แอดนอกได้ <span style="color:#4CAF50;font-weight:600;">${formatPrice(d.externalCut)} ฿</span> (${Math.round((d.externalCut / d.price) * 100)}%) · Owner ได้ <span style="color:#e0b0ff;font-weight:600;">${formatPrice(d.price - d.externalCut)} ฿</span></div>` : ''}
           </div>
           <div class="pending-item-actions">
             <button class="btn-pending-approve" data-pending-id="${doc.id}">อนุมัติ</button>

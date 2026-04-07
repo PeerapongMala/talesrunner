@@ -235,6 +235,16 @@ async function confirmDeliver() {
 
         if (di.qty > remaining) throw new Error(`${di.name} ส่งได้อีกแค่ ${remaining}`);
 
+        // เช็ค adminStock ของคนส่งไม่ให้ติดลบ
+        const itemDoc = await transaction.get(db.collection('items').doc(di.itemId));
+        if (itemDoc.exists) {
+          const iData = itemDoc.data();
+          const myAdminStock = typeof getAdminStockValue === 'function'
+            ? getAdminStockValue(iData.adminStock || {}, adminName)
+            : (Number((iData.adminStock || {})[adminName]) || 0);
+          if (di.qty > myAdminStock) throw new Error(`${di.name} stock ของคุณมีแค่ ${myAdminStock}`);
+        }
+
         newDeliveries.push({
           itemId: di.itemId,
           qty: di.qty,
@@ -440,11 +450,18 @@ async function cancelOrder(orderId) {
 
 // ============ REVENUE SUMMARY PER ADMIN ============
 let revenueResetAt = null; // โหลดจาก settings
+let revenueSelectedOrders = null; // ถ้ามี = นับเฉพาะ order เหล่านี้
 
 function loadRevenueResetDate() {
   return db.collection('settings').doc('revenue').get().then(doc => {
-    if (doc.exists && doc.data().resetAt) {
-      revenueResetAt = doc.data().resetAt.toDate();
+    if (doc.exists) {
+      const data = doc.data();
+      if (data.resetAt) revenueResetAt = data.resetAt.toDate();
+      if (Array.isArray(data.selectedOrders) && data.selectedOrders.length > 0) {
+        revenueSelectedOrders = new Set(data.selectedOrders);
+      } else {
+        revenueSelectedOrders = null;
+      }
     }
   }).catch(() => {});
 }
@@ -458,9 +475,29 @@ async function resetRevenueSummary() {
       resetAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     revenueResetAt = new Date();
+    revenueSelectedOrders = null;
     showToast('รีเซ็ตยอดขายแล้ว');
   } catch (e) {
     showAlert('รีเซ็ตไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+// ซ่อมยอดรวม stats/sales จาก completed orders ทั้งหมด
+async function repairStats() {
+  const yes = await showConfirm('ซ่อมยอดรวม (นับ completed orders ทั้งหมดใหม่)?', 'ซ่อมยอดรวม');
+  if (!yes) return;
+  try {
+    showToast('กำลังนับ orders...');
+    const snap = await db.collection('orders').where('status', '==', 'completed').get();
+    let total = 0;
+    snap.forEach(doc => { total += Number(doc.data().totalPrice) || 0; });
+    await db.collection('stats').doc('sales').set({
+      completedCount: snap.size,
+      totalRevenue: total
+    });
+    showAlert(`ซ่อมเสร็จ!\n\nออเดอร์สำเร็จ: ${snap.size}\nยอดรวม: ${total.toLocaleString()} บาท`, 'ซ่อมยอดรวม');
+  } catch (e) {
+    showAlert('ซ่อมไม่ได้: ' + e.message, 'ผิดพลาด');
   }
 }
 
@@ -579,10 +616,13 @@ async function recalculateRevenue() {
         let totalRevenue = 0;
         selected.forEach(o => totalRevenue += Number(o.totalPrice) || 0);
 
-        await db.collection('stats').doc('sales').set({
-          completedCount: selected.length,
-          totalRevenue
+        // เก็บ list order ที่เลือก → สรุปยอดแอดมินจะกรองตาม (ไม่แตะ stats/sales)
+        const selectedIds = selected.map(o => o.id);
+        await db.collection('settings').doc('revenue').set({
+          selectedOrders: selectedIds
         });
+        revenueResetAt = null;
+        revenueSelectedOrders = new Set(selectedIds);
 
         overlay.remove();
         showAlert(
@@ -614,8 +654,10 @@ function updateRevenueSummary(orderDocs) {
     const order = doc.data();
     if (order.status !== 'completed') return;
 
-    // ข้าม order ก่อน reset
-    if (revenueResetAt && order.createdAt && order.createdAt.toDate() < revenueResetAt) return;
+    // ถ้ามี selectedOrders (จากคำนวณใหม่) → นับเฉพาะ order ที่เลือก
+    if (revenueSelectedOrders && !revenueSelectedOrders.has(doc.id)) return;
+    // ข้าม order ก่อน reset (ใช้เมื่อไม่มี selectedOrders)
+    if (!revenueSelectedOrders && revenueResetAt && order.createdAt && order.createdAt.toDate() < revenueResetAt) return;
     completedCount++;
 
     const items = Array.isArray(order.items) ? order.items : [];
@@ -654,20 +696,43 @@ function updateRevenueSummary(orderDocs) {
     });
   });
 
-  // หัก com 5% จากแอดมินที่ไม่ใช่ owner
+  // หัก com: ถ้าสินค้ามี externalCut ใช้ per-product, ไม่มีใช้ flat 5%
   const COM_RATE = 0.05;
   const adminRevenueNet = {};
   const adminComAmount = {};
+  // คำนวณ externalCut com ต่อ admin จาก delivery records
+  const adminExternalCutCom = {};
+  orderDocs.forEach(doc => {
+    const order = doc.data();
+    if (order.status !== 'completed') return;
+    if (revenueSelectedOrders && !revenueSelectedOrders.has(doc.id)) return;
+    if (!revenueSelectedOrders && revenueResetAt && order.createdAt && order.createdAt.toDate() < revenueResetAt) return;
+    const items = Array.isArray(order.items) ? order.items : [];
+    const deliveries = Array.isArray(order.deliveries) ? order.deliveries : [];
+    deliveries.forEach(del => {
+      const item = items.find(i => i.itemId === del.itemId);
+      if (!item) return;
+      // หา product จาก allProducts เพื่อเช็ค externalCut
+      const product = typeof allProducts !== 'undefined' ? allProducts.find(p => p.id === del.itemId) : null;
+      if (product && product.externalCut > 0) {
+        // สินค้ามี externalCut → แอดนอกได้ externalCut * qty, owner ได้ส่วนที่เหลือ
+        const cutTotal = product.externalCut * del.qty;
+        adminExternalCutCom[del.by] = (adminExternalCutCom[del.by] || 0) + cutTotal;
+      }
+    });
+  });
+
   for (const [name, rev] of Object.entries(adminRevenue)) {
-    // เช็คว่าเป็น owner หรือไม่ — owner ไม่โดนหัก
     const isAdminOwner = name === currentAdminName && isOwner;
-    // ถ้าดูจาก owner มุมมอง: ต้องเช็คจาก adminNames + role
-    // วิธีง่าย: owner คือคนที่ login อยู่ตอนนี้ (isOwner && name === currentAdminName)
-    // คนอื่นหัก com หมด
     if (isAdminOwner) {
       adminRevenueNet[name] = rev;
       adminComAmount[name] = 0;
+    } else if (adminExternalCutCom[name] > 0) {
+      // มี externalCut → ใช้ externalCut เป็นยอดสุทธิ
+      adminRevenueNet[name] = adminExternalCutCom[name];
+      adminComAmount[name] = rev - adminExternalCutCom[name];
     } else {
+      // ไม่มี externalCut → flat 5%
       const com = rev * COM_RATE;
       adminRevenueNet[name] = rev - com;
       adminComAmount[name] = com;
@@ -690,6 +755,7 @@ function updateRevenueSummary(orderDocs) {
             <span class="revenue-total">${formatPrice(totalRevenue)} บาท</span>
             <button class="btn-secondary" style="padding:4px 10px;font-size:11px;width:auto;" onclick="recalculateRevenue()">🔄 คำนวณใหม่</button>
             <button class="btn-secondary" style="padding:4px 10px;font-size:11px;width:auto;color:#ff9800;border-color:#ff9800;" onclick="resetRevenueSummary()">รีเซ็ต</button>
+            <button class="btn-secondary" style="padding:4px 10px;font-size:11px;width:auto;color:#4fc3f7;border-color:#4fc3f7;" onclick="repairStats()">🔧 ซ่อมยอดรวม</button>
           </span>
         </div>
         ${totalCom > 0 ? `<div style="text-align:right;font-size:12px;color:#4CAF50;margin:-4px 0 8px;">รายได้ค่า com 5%: +${formatPrice(Math.round(totalCom))} ฿</div>` : ''}

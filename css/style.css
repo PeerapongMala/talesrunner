@@ -288,7 +288,7 @@ body {
   font-family: 'Kanit', sans-serif;
   font-size: 15px;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
 }
 
 .nav-tab:hover {
@@ -314,13 +314,13 @@ body {
 .sub-tab {
   padding: 6px 16px;
   background: rgba(155, 77, 202, 0.15);
-  border: 1px solid rgba(255, 105, 180, 0.2);
+  border: 2px solid rgba(255, 105, 180, 0.2);
   border-radius: 20px;
   color: #ccc;
   font-family: 'Kanit', sans-serif;
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
 }
 
 .sub-tab:hover {
@@ -352,7 +352,7 @@ body {
   font-family: 'Kanit', sans-serif;
   font-size: 13px;
   outline: none;
-  transition: border-color 0.3s;
+  transition: all 0.2s;
 }
 
 .category-add-row input:focus {
@@ -526,7 +526,7 @@ body {
   padding: 15px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
   position: relative;
 }
 
@@ -1532,7 +1532,7 @@ body {
   font-family: 'Kanit', sans-serif;
   font-size: 14px;
   outline: none;
-  transition: border-color 0.3s;
+  transition: all 0.2s;
   box-sizing: border-box;
 }
 .coupon-apply-input:focus {
@@ -1605,7 +1605,7 @@ body {
   font-family: 'Kanit', sans-serif;
   font-size: 14px;
   outline: none;
-  transition: border-color 0.3s;
+  transition: all 0.2s;
 }
 
 .form-group select option {
@@ -1627,7 +1627,7 @@ body {
   padding: 20px;
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.3s;
+  transition: all 0.2s;
 }
 
 .image-upload-area:hover {
@@ -1690,7 +1690,7 @@ body {
   text-align: center;
   letter-spacing: 4px;
   outline: none;
-  transition: border-color 0.3s;
+  transition: all 0.2s;
 }
 
 .captcha-box input:focus {
@@ -1707,12 +1707,12 @@ body {
   align-items: flex-start;
   gap: 10px;
   background: rgba(255, 68, 68, 0.1);
-  border: 1px solid rgba(255, 68, 68, 0.35);
+  border: 2px solid rgba(255, 68, 68, 0.35);
   border-radius: 8px;
   padding: 12px;
   margin: 15px 0 5px;
   cursor: pointer;
-  transition: border-color 0.3s;
+  transition: all 0.2s;
 }
 
 .confirm-checkbox:hover {
@@ -2272,14 +2272,14 @@ body {
 .coupon-select {
   width: 100%;
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 2px solid rgba(155, 77, 202, 0.5);
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
   font-size: 14px;
   font-family: 'Kanit', sans-serif;
   outline: none;
-  transition: border-color 0.3s;
+  transition: all 0.2s;
 }
 .coupon-select:focus {
   border-color: #ff69b4;
@@ -2328,7 +2328,7 @@ body {
   width: auto;
   padding: 0 28px;
   white-space: nowrap;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 .pp-input {
   flex: 1;
@@ -2336,13 +2336,13 @@ body {
   font-size: 16px;
   letter-spacing: 1.5px;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.1);
   border: 2px solid rgba(155, 77, 202, 0.5);
   color: #fff;
   font-family: 'Kanit', sans-serif;
   outline: none;
-  transition: border-color 0.3s;
+  transition: all 0.2s;
   box-sizing: border-box;
 }
 .pp-input:focus {
@@ -2725,12 +2725,15 @@ body {
   width: 70px;
   padding: 4px 6px;
   background: rgba(30, 15, 40, 0.6);
-  border: 1px solid rgba(155, 77, 202, 0.3);
+  border: 2px solid rgba(155, 77, 202, 0.3);
   border-radius: 6px;
   color: #ff9800;
   font-weight: 600;
   font-size: 13px;
+  font-family: 'Kanit', sans-serif;
   text-align: center;
+  outline: none;
+  transition: all 0.2s;
 }
 
 .promo-input::placeholder {
@@ -2739,7 +2742,6 @@ body {
 }
 
 .promo-input:focus {
-  outline: none;
   border-color: #ff9800;
 }
 
@@ -3148,4 +3150,41 @@ body {
     flex-wrap: wrap;
     gap: 6px;
   }
+}
+
+/* ============ COMMISSION TIER INPUTS ============ */
+.tier-max-input,
+.tier-pct-input,
+#externalDelayInput {
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(155, 77, 202, 0.4);
+  border-radius: 6px;
+  color: #fff;
+  font-family: 'Kanit', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.tier-max-input:focus,
+.tier-pct-input:focus,
+#externalDelayInput:focus {
+  border-color: #ff69b4;
+}
+
+.tier-max-input {
+  width: 80px;
+  text-align: center;
+}
+
+.tier-pct-input {
+  width: 60px;
+  text-align: center;
+}
+
+#externalDelayInput {
+  width: 60px;
+  text-align: center;
 }

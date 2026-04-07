@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BubbleShop - Admin</title>
     <link rel="icon" type="image/png" href="pic/jin-arc-trace.png" />
-    <link rel="stylesheet" href="css/style.css?v=10" />
+    <link rel="stylesheet" href="css/style.css?v=11" />
   </head>
   <body>
     <!-- LOGIN MODAL -->
@@ -150,6 +150,7 @@
             <button class="sub-tab owner-only" data-settab="coupons">คูปอง</button>
             <button class="sub-tab owner-only" data-settab="promptpay">พร้อมเพย์</button>
             <button class="sub-tab owner-only" data-settab="admins">แอดมิน</button>
+            <button class="sub-tab owner-only" data-settab="commission">ค่า Com</button>
           </div>
 
           <!-- BAN LIST -->
@@ -226,6 +227,23 @@
                   <tr><td colspan="3" style="text-align:center;color:#aaa;">กำลังโหลด...</td></tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- ค่า Com ขั้นบันได (owner only) -->
+          <div class="settings-card settings-sub" id="commissionCard">
+            <div class="coupon-section-header">
+              <div>
+                <h2 class="coupon-section-title">ค่า Com แอดมินภายนอก</h2>
+                <p class="coupon-section-desc">ตั้งอัตราค่า com ขั้นบันไดตามช่วงราคาสินค้า (Owner ได้กี่ %)</p>
+              </div>
+            </div>
+            <div id="commissionTiersContainer">
+              <p style="text-align:center;color:#aaa;padding:20px;">กำลังโหลด...</p>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
+              <button class="btn-secondary" id="addTierBtn" style="width:auto;padding:8px 16px;">+ เพิ่มขั้น</button>
+              <button class="btn-primary" id="saveTiersBtn" style="width:auto;padding:8px 24px;">บันทึก</button>
             </div>
           </div>
 
@@ -364,6 +382,10 @@
         <div class="form-group">
           <label>หมวดหมู่</label>
           <div id="addProductCategories" class="category-checkbox-list"></div>
+        </div>
+        <div class="form-group" id="externalCutGroup" style="display:none;">
+          <label>ส่วนแบ่งค่า com (คำนวณอัตโนมัติ)</label>
+          <p id="externalCutPreview" style="font-size:13px;margin-top:4px;color:#aaa;"></p>
         </div>
         <div class="form-group">
           <label>รูปสินค้า</label>
@@ -624,9 +646,9 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     <script src="js/firebase-config.js?v=5"></script>
     <script src="js/modal-alert.js?v=9"></script>
-    <script src="js/admin-core.js?v=9"></script>
-    <script src="js/admin-orders.js?v=8"></script>
-    <script src="js/admin-products.js?v=8"></script>
-    <script src="js/admin-settings.js?v=9"></script>
+    <script src="js/admin-core.js?v=10"></script>
+    <script src="js/admin-orders.js?v=11"></script>
+    <script src="js/admin-products.js?v=10"></script>
+    <script src="js/admin-settings.js?v=10"></script>
   </body>
 </html>
