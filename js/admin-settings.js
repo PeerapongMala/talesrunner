@@ -2,7 +2,6 @@
 let unsubAdmins = null;
 let unsubPendingAdmins = null;
 let unsubShopSettings = null;
-let unsubCompletedOrders = null;
 let _payModeCallback = null; // callback จาก setupPayModeToggle
 
 function loadAdminRoles() {
@@ -359,41 +358,23 @@ function loadOrders() {
   loadCompletedOrders();
 }
 
-function loadCompletedOrders() {
-  if (unsubCompletedOrders) { unsubCompletedOrders(); unsubCompletedOrders = null; }
-
-  const query = db.collection('orders')
-    .where('status', 'in', ['completed', 'cancelled'])
-    .orderBy('createdAt', 'desc')
-    .limit(currentOrderLimit);
-
-  // Quota saving mode → .get() ครั้งเดียว
-  if (_quotaSaving) {
-    query.get().then(snap => {
-      _completedOrders = snap.docs;
-      if (_lastPendingSnapshot) {
-        const board = document.getElementById('orderBoard');
-        const combined = { docs: [..._lastPendingSnapshot, ..._completedOrders] };
-        processOrderSnapshot(combined, board);
-      }
-    }).catch(e => {
-      console.warn('loadCompletedOrders:', e.message);
-      if (typeof handleQuotaError === 'function') handleQuotaError(e, 'loadCompletedOrders');
-    });
-    return;
-  }
-
-  unsubCompletedOrders = query.onSnapshot(snap => {
+async function loadCompletedOrders() {
+  try {
+    const snap = await db.collection('orders')
+      .where('status', 'in', ['completed', 'cancelled'])
+      .orderBy('createdAt', 'desc')
+      .limit(currentOrderLimit)
+      .get();
     _completedOrders = snap.docs;
     if (_lastPendingSnapshot) {
       const board = document.getElementById('orderBoard');
       const combined = { docs: [..._lastPendingSnapshot, ..._completedOrders] };
       processOrderSnapshot(combined, board);
     }
-  }, e => {
+  } catch (e) {
     console.warn('loadCompletedOrders:', e.message);
     if (typeof handleQuotaError === 'function') handleQuotaError(e, 'loadCompletedOrders');
-  });
+  }
 }
 
 let _externalDelayTimer = null;

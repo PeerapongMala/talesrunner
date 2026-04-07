@@ -304,6 +304,8 @@ async function confirmDeliver() {
 
     closeDeliverModal();
     showToast('บันทึกการส่งของแล้ว');
+    // reload completed orders
+    if (typeof loadCompletedOrders === 'function') loadCompletedOrders();
   } catch (e) {
     if (isQuotaError(e)) {
       // Quota หมด → บันทึก offline แทน
