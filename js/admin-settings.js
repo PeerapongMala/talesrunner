@@ -514,7 +514,8 @@ function processOrderSnapshot(snapshot, board) {
             ${order.originalPrice && order.originalPrice !== order.totalPrice ? `<span style="text-decoration:line-through;color:#aaa;font-size:12px;margin-left:5px;">${formatPrice(order.originalPrice)}</span>` : ''}
           </div>
           <div style="margin-top:8px;">
-            ${(order.slipImage || order.hasSlip) ? `<button class="btn-table secondary" data-action="viewSlip" data-id="${docId}">ดูสลิปโอนเงิน</button>` : '<span style="color:#ff4444; font-size:12px;">ไม่มีสลิปโอนเงิน</span>'}
+            ${order.paymentMode === 'paid' ? '<span style="color:#4CAF50;font-size:12px;font-weight:600;">โอนแล้ว</span>' : '<span style="color:#ff9800;font-size:12px;font-weight:600;">สั่งก่อน (ยังไม่โอน)</span>'}
+            ${(order.slipImage || order.hasSlip) ? `<button class="btn-table secondary" data-action="viewSlip" data-id="${docId}" style="margin-left:6px;">ดูสลิป</button>` : ''}
           </div>
         </div>
         <div class="admin-order-actions">
