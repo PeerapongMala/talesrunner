@@ -464,6 +464,44 @@ async function resetRevenueSummary() {
   }
 }
 
+// คำนวณยอดขายใหม่จาก completed orders + sync stats doc
+async function recalculateRevenue() {
+  const yes = await showConfirm(
+    'คำนวณยอดขายใหม่จาก completed orders ทั้งหมด?\n(จะอ่าน orders จาก Firestore แล้ว update stats)',
+    'คำนวณยอดใหม่'
+  );
+  if (!yes) return;
+
+  try {
+    showToast('กำลังคำนวณ...');
+    const snapshot = await db.collection('orders').get();
+    let totalRevenue = 0;
+    let completedCount = 0;
+
+    snapshot.forEach(doc => {
+      const order = doc.data();
+      if (order.status !== 'completed') return;
+      completedCount++;
+      totalRevenue += Number(order.totalPrice) || 0;
+    });
+
+    await db.collection('stats').doc('sales').set({
+      completedCount,
+      totalRevenue
+    });
+
+    showAlert(
+      `คำนวณใหม่เสร็จ!\n\nจำนวน completed: ${completedCount}\nยอดรวม: ${totalRevenue.toLocaleString()} บาท`,
+      '✅ คำนวณยอดใหม่'
+    );
+
+    // refresh revenue display
+    if (typeof loadOrders === 'function') loadOrders();
+  } catch (e) {
+    showAlert('คำนวณไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
 function updateRevenueSummary(orderDocs) {
   const container = document.getElementById('adminRevenueSummary');
   if (!container) return;
@@ -552,6 +590,7 @@ function updateRevenueSummary(orderDocs) {
           <span>สรุปยอดขายแอดมิน</span>
           <span style="display:flex;align-items:center;gap:10px;">
             <span class="revenue-total">${formatPrice(totalRevenue)} บาท</span>
+            <button class="btn-secondary" style="padding:4px 10px;font-size:11px;width:auto;" onclick="recalculateRevenue()">🔄 คำนวณใหม่</button>
             <button class="btn-secondary" style="padding:4px 10px;font-size:11px;width:auto;color:#ff9800;border-color:#ff9800;" onclick="resetRevenueSummary()">รีเซ็ต</button>
           </span>
         </div>

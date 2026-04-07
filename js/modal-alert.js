@@ -427,6 +427,7 @@ async function syncOfflineQueue() {
 
   let success = 0, fail = 0;
   const remaining = [];
+  const errors = [];
 
   for (const entry of queue) {
     try {
@@ -447,8 +448,8 @@ async function syncOfflineQueue() {
             .filter(d => d.itemId === di.itemId)
             .reduce((sum, d) => sum + d.qty, 0);
           const orderItem = orderItems.find(i => i.itemId === di.itemId);
-          const remaining = orderItem ? orderItem.qty - totalDelivered : 0;
-          if (di.qty > remaining) throw new Error(`${di.name} ส่งเกินจำนวน`);
+          const remain = orderItem ? orderItem.qty - totalDelivered : 0;
+          if (di.qty > remain) throw new Error(`${di.name} ส่งเกินจำนวน`);
 
           newDeliveries.push({ itemId: di.itemId, qty: di.qty, by: entry.adminName, at: new Date() });
 
@@ -482,11 +483,12 @@ async function syncOfflineQueue() {
     } catch (e) {
       if (isQuotaError(e)) {
         remaining.push(entry);
-        fail++;
       } else {
-        console.error('Sync failed for', entry.orderId, e.message);
-        fail++;
+        // เก็บ error + entry ไว้ถาม user
+        errors.push({ entry, reason: e.message });
+        remaining.push(entry); // เก็บไว้ก่อน ไม่ลบ
       }
+      fail++;
     }
   }
 
@@ -496,7 +498,24 @@ async function syncOfflineQueue() {
   if (fail === 0) {
     showAlert(`Sync สำเร็จทั้งหมด ${success} รายการ!`, '✅ Sync เสร็จ');
     _quotaSaving = false;
+  } else if (errors.length > 0) {
+    // แจ้ง error แต่ละรายการ พร้อมปุ่ม force ลบ
+    const errMsg = errors.map(e =>
+      `• FB: ${e.entry.facebook} — ${e.reason}`
+    ).join('\n');
+    const doForce = await showConfirm(
+      `Sync ได้ ${success}, fail ${fail} รายการ:\n\n${errMsg}\n\nต้องการลบรายการที่ fail ออก?`,
+      'Sync ไม่สำเร็จ'
+    );
+    if (doForce) {
+      // ลบ error entries ออกจาก remaining
+      const errorOrderIds = new Set(errors.map(e => e.entry.orderId));
+      const cleaned = remaining.filter(r => !errorOrderIds.has(r.orderId));
+      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(cleaned));
+      renderOfflineQueue();
+      showToast(`ลบ ${errors.length} รายการที่ sync ไม่ได้แล้ว`);
+    }
   } else {
-    showAlert(`Sync ได้ ${success} รายการ, ไม่สำเร็จ ${fail} รายการ${remaining.length > 0 ? ' (quota ยังหมด)' : ''}`, 'ผลการ Sync');
+    showAlert(`Sync ได้ ${success} รายการ, ไม่สำเร็จ ${fail} รายการ (quota ยังหมด)`, 'ผลการ Sync');
   }
 }
