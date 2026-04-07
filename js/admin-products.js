@@ -1,3 +1,8 @@
+// ============ PAGINATION ============
+let productPage = 1;
+const PRODUCTS_PER_PAGE = 20;
+let _lastProductSnapshot = null;
+
 // ============ HELPER: เช็คว่าสินค้าเป็นของ admin คนนี้ ============
 function isMyProduct(item) {
   if (!currentAdminName) return false;
@@ -41,6 +46,7 @@ function loadProducts() {
 }
 
 function processProductSnapshot(snapshot) {
+  _lastProductSnapshot = snapshot;
   const tbody = document.getElementById('productTableBody');
   if (snapshot.empty) {
       allProducts = [];
@@ -72,7 +78,14 @@ function processProductSnapshot(snapshot) {
     // External admin → แสดงเฉพาะสินค้าที่ตัวเองมี adminStock หรือ shared
     const visibleProducts = isExternal ? allProducts.filter(item => isMyProduct(item)) : allProducts;
 
-    tbody.innerHTML = visibleProducts.map((item, index) => {
+    // Pagination
+    const totalPages = Math.max(1, Math.ceil(visibleProducts.length / PRODUCTS_PER_PAGE));
+    if (productPage > totalPages) productPage = totalPages;
+    const startIdx = (productPage - 1) * PRODUCTS_PER_PAGE;
+    const pageProducts = visibleProducts.slice(startIdx, startIdx + PRODUCTS_PER_PAGE);
+
+    tbody.innerHTML = pageProducts.map((item, i) => {
+      const index = startIdx + i;
       const isActive = item.active !== false;
       return `
         <tr draggable="true" data-id="${item.id}" style="${!isActive ? 'opacity:0.4;' : ''}">
@@ -109,6 +122,20 @@ function processProductSnapshot(snapshot) {
     Object.keys(stockAccum).forEach(id => {
       if (stockAccum[id].total !== 0) showStockAccumBadge(id, stockAccum[id].total);
     });
+
+    // Render pagination
+    renderProductPagination(totalPages, visibleProducts.length);
+}
+
+function renderProductPagination(totalPages, totalCount) {
+  const container = document.getElementById('productPagination');
+  if (!container) return;
+  if (totalPages <= 1) { container.innerHTML = `<span style="color:#aaa;font-size:12px;">สินค้าทั้งหมด ${totalCount} รายการ</span>`; return; }
+  container.innerHTML = `
+    <button class="btn-secondary" style="width:auto;padding:4px 12px;font-size:12px;" ${productPage <= 1 ? 'disabled' : ''} onclick="productPage--;processProductSnapshot(_lastProductSnapshot);">&#9664;</button>
+    <span style="color:#e0b0ff;font-size:13px;">หน้า ${productPage}/${totalPages} (${totalCount} รายการ)</span>
+    <button class="btn-secondary" style="width:auto;padding:4px 12px;font-size:12px;" ${productPage >= totalPages ? 'disabled' : ''} onclick="productPage++;processProductSnapshot(_lastProductSnapshot);">&#9654;</button>
+  `;
 }
 
 // ============ HELPER: อ่าน adminStock รองรับทั้ง flat key และ nested path ============

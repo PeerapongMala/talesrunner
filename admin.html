@@ -117,29 +117,32 @@
             <button class="btn-secondary" id="clearStockHistoryBtn" style="width:auto;padding:8px 16px;font-size:12px;color:#ff9800;border-color:#ff9800;" onclick="clearAllStockHistory()">เคลียร์ประวัติ Stock ทั้งหมด</button>
             <button class="btn-secondary" style="width:auto;padding:8px 16px;font-size:12px;color:#ff4444;border-color:#ff4444;" onclick="resetAllStockToZero()">รีเซ็ต Stock ทั้งหมดเป็น 0</button>
           </div>
+          <div style="overflow-x:auto;">
           <table class="product-table">
             <thead>
               <tr>
-                <th style="width: 4%; text-align: center">#</th>
-                <th style="width: 7%; text-align: center">รูป</th>
-                <th style="width: 30%">ชื่อ</th>
-                <th style="width: 9%; text-align: center">ราคา</th>
-                <th style="width: 10%; text-align: center">โปรโมชั่น</th>
-                <th style="width: 7%; text-align: center">Stock</th>
-                <th style="width: 6%; text-align: center">ขายได้<br>(ออเดอร์)</th>
-                <th style="width: 8%; text-align: center">เพิ่ม/ลด</th>
-                <th style="width: 5%; text-align: center">ประวัติ</th>
-                <th style="width: 8%; text-align: center">จัดการ</th>
+                <th style="width:40px;text-align:center">#</th>
+                <th style="width:60px;text-align:center">รูป</th>
+                <th style="min-width:160px;">ชื่อ</th>
+                <th style="width:80px;text-align:center">ราคา</th>
+                <th style="width:100px;text-align:center">โปรโมชั่น</th>
+                <th style="width:60px;text-align:center">Stock</th>
+                <th style="width:60px;text-align:center">ขายได้</th>
+                <th style="width:80px;text-align:center">เพิ่ม/ลด</th>
+                <th style="width:50px;text-align:center">ประวัติ</th>
+                <th style="width:70px;text-align:center">จัดการ</th>
               </tr>
             </thead>
             <tbody id="productTableBody">
               <tr>
-                <td colspan="9" style="text-align: center; color: #aaa">
+                <td colspan="10" style="text-align: center; color: #aaa">
                   กำลังโหลด...
                 </td>
               </tr>
             </tbody>
           </table>
+          </div>
+          <div id="productPagination" style="display:flex;justify-content:center;align-items:center;gap:12px;margin-top:12px;"></div>
         </div>
 
         <!-- SETTINGS (รวม BAN + ส่วนลด + แอดมิน) -->
