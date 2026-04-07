@@ -1477,11 +1477,12 @@ async function confirmBulkAssign() {
 let unsubPendingItems = null;
 
 function loadPendingItems() {
-  if (!isOwner) return;
   if (unsubPendingItems) { unsubPendingItems(); unsubPendingItems = null; }
 
   unsubPendingItems = db.collection('pending_items').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
-    renderPendingItems(snapshot.docs);
+    // non-owner: เฉพาะของตัวเอง
+    const docs = isOwner ? snapshot.docs : snapshot.docs.filter(d => d.data().submittedBy === currentAdminName);
+    renderPendingItems(docs);
   }, e => {
     console.warn('pending_items listener:', e.message);
   });
@@ -1499,7 +1500,7 @@ function renderPendingItems(docs) {
 
   container.style.display = 'block';
   container.innerHTML = `
-    <div class="pending-items-header">สินค้ารออนุมัติ (${docs.length})</div>
+    <div class="pending-items-header">${isOwner ? 'สินค้ารออนุมัติ' : 'สินค้าของคุณรออนุมัติ'} (${docs.length})</div>
     ${docs.map(doc => {
       const d = doc.data();
       const bqText = d.bundleQty > 1 ? ` (ชุดละ ${d.bundleQty})` : '';
@@ -1512,8 +1513,8 @@ function renderPendingItems(docs) {
             ${d.externalCut ? `<div style="font-size:11px;margin-top:2px;color:#ff9800;">ส่วนแบ่ง: แอดนอกได้ <span style="color:#4CAF50;font-weight:600;">${formatPrice(d.externalCut)} ฿</span> (${Math.round((d.externalCut / d.price) * 100)}%) · Owner ได้ <span style="color:#e0b0ff;font-weight:600;">${formatPrice(d.price - d.externalCut)} ฿</span></div>` : ''}
           </div>
           <div class="pending-item-actions">
-            <button class="btn-pending-approve" data-pending-id="${doc.id}">อนุมัติ</button>
-            <button class="btn-pending-reject" data-pending-id="${doc.id}">ปฏิเสธ</button>
+            ${isOwner ? `<button class="btn-pending-approve" data-pending-id="${doc.id}">อนุมัติ</button>
+            <button class="btn-pending-reject" data-pending-id="${doc.id}">ปฏิเสธ</button>` : `<button class="btn-pending-reject" data-pending-id="${doc.id}">ยกเลิก</button>`}
           </div>
         </div>
       `;
@@ -1565,11 +1566,11 @@ async function rejectPendingItem(pendingId) {
 let unsubPendingDeletes = null;
 
 function loadPendingDeletes() {
-  if (!isOwner) return;
   if (unsubPendingDeletes) { unsubPendingDeletes(); unsubPendingDeletes = null; }
 
   unsubPendingDeletes = db.collection('pending_deletes').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
-    renderPendingDeletes(snapshot.docs);
+    const docs = isOwner ? snapshot.docs : snapshot.docs.filter(d => d.data().requestedBy === currentAdminName);
+    renderPendingDeletes(docs);
   }, e => {
     console.warn('pending_deletes listener:', e.message);
   });
@@ -1587,7 +1588,7 @@ function renderPendingDeletes(docs) {
 
   container.style.display = 'block';
   container.innerHTML = `
-    <div class="pending-items-header" style="color:#ff4444;">รอลบสินค้า (${docs.length})</div>
+    <div class="pending-items-header" style="color:#ff4444;">${isOwner ? 'รอลบสินค้า' : 'คำขอลบรออนุมัติ'} (${docs.length})</div>
     ${docs.map(doc => {
       const d = doc.data();
       return `
@@ -1598,8 +1599,8 @@ function renderPendingDeletes(docs) {
             <div class="pending-item-detail">ขอลบโดย ${escapeHtml(d.requestedBy || '?')}</div>
           </div>
           <div class="pending-item-actions">
-            <button class="btn-pending-approve" data-delete-id="${doc.id}" data-item-id="${d.itemId}">อนุมัติลบ</button>
-            <button class="btn-pending-reject" data-delete-id="${doc.id}">ปฏิเสธ</button>
+            ${isOwner ? `<button class="btn-pending-approve" data-delete-id="${doc.id}" data-item-id="${d.itemId}">อนุมัติลบ</button>
+            <button class="btn-pending-reject" data-delete-id="${doc.id}">ปฏิเสธ</button>` : `<button class="btn-pending-reject" data-delete-id="${doc.id}">ยกเลิก</button>`}
           </div>
         </div>
       `;
@@ -1635,11 +1636,11 @@ async function rejectPendingDelete(pendingDeleteId) {
 let unsubPendingActions = null;
 
 function loadPendingActions() {
-  if (!isOwner) return;
   if (unsubPendingActions) { unsubPendingActions(); unsubPendingActions = null; }
 
   unsubPendingActions = db.collection('pending_actions').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
-    renderPendingActions(snapshot.docs);
+    const docs = isOwner ? snapshot.docs : snapshot.docs.filter(d => d.data().requestedBy === currentAdminName);
+    renderPendingActions(docs);
   }, e => {
     console.warn('pending_actions listener:', e.message);
   });
@@ -1664,7 +1665,7 @@ function renderPendingActions(docs) {
 
   container.style.display = 'block';
   container.innerHTML = `
-    <div class="pending-items-header" style="color:#4fc3f7;">รอ Owner อนุมัติ (${docs.length})</div>
+    <div class="pending-items-header" style="color:#4fc3f7;">${isOwner ? 'รอ Owner อนุมัติ' : 'คำขอรออนุมัติ'} (${docs.length})</div>
     ${docs.map(doc => {
       const d = doc.data();
       const typeLabel = typeLabels[d.type] || d.type;
@@ -1686,8 +1687,8 @@ function renderPendingActions(docs) {
             <div class="pending-item-detail" style="color:#888;">โดย ${escapeHtml(d.requestedBy || '?')}</div>
           </div>
           <div class="pending-item-actions">
-            <button class="btn-pending-approve" data-action-id="${doc.id}">อนุมัติ</button>
-            <button class="btn-pending-reject" data-action-id="${doc.id}">ปฏิเสธ</button>
+            ${isOwner ? `<button class="btn-pending-approve" data-action-id="${doc.id}">อนุมัติ</button>
+            <button class="btn-pending-reject" data-action-id="${doc.id}">ปฏิเสธ</button>` : `<button class="btn-pending-reject" data-action-id="${doc.id}">ยกเลิก</button>`}
           </div>
         </div>
       `;
