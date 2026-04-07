@@ -60,6 +60,15 @@ function processProductSnapshot(snapshot) {
 
     allProducts.sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity));
 
+    // External admin: products โหลดแล้ว → re-render orders board (กรณี orders มาก่อน products)
+    if (isExternal && typeof _lastPendingSnapshot !== 'undefined' && _lastPendingSnapshot) {
+      const board = document.getElementById('orderBoard');
+      if (board) {
+        const combined = { docs: [..._lastPendingSnapshot, ...(_completedOrders || [])] };
+        processOrderSnapshot(combined, board);
+      }
+    }
+
     // External admin → แสดงเฉพาะสินค้าที่ตัวเองมี adminStock
     const visibleProducts = isExternal ? allProducts.filter(item => isMyProduct(item)) : allProducts;
 
