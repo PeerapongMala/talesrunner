@@ -95,6 +95,17 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ============ PENDING (approval system) ============
+    match /pending_items/{docId} {
+      allow read, write: if isAdmin();
+    }
+    match /pending_deletes/{docId} {
+      allow read, write: if isAdmin();
+    }
+    match /pending_actions/{docId} {
+      allow read, write: if isAdmin();
+    }
+
     // ============ COUPONS ============
     match /coupons/{couponId} {
       allow read: if true;

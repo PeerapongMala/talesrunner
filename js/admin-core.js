@@ -147,8 +147,8 @@ function setupLogin() {
             quotaEl.addEventListener('click', () => window.open('https://console.firebase.google.com/project/telesrunner-afab6/usage', '_blank'));
           }
         }
-        // ซ่อนปุ่ม owner-only สำหรับ non-owner
-        if (!isOwner) {
+        // ซ่อนปุ่ม owner-only สำหรับ external (internal เห็นหมวดหมู่ได้)
+        if (isExternal) {
           const catBtn = document.getElementById('manageCategoriesBtn');
           if (catBtn) catBtn.style.display = 'none';
         }
@@ -183,6 +183,7 @@ function setupLogin() {
         if (typeof loadPendingDeletes === 'function') loadPendingDeletes();
         if (typeof loadCommissionTiers === 'function') loadCommissionTiers();
         if (typeof setupCommissionTiers === 'function') setupCommissionTiers();
+        if (typeof loadPendingActions === 'function') loadPendingActions();
       } catch (err) {
         // Permission Denied แปลว่าไม่ใช่แอดมิน
         console.warn('Not an admin:', err.message);
@@ -532,6 +533,27 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(() => showToast(val === '' ? 'ลบราคาโปรแล้ว' : 'ตั้งราคาโปร ' + val + ' บาท (24 ชม.)'))
         .catch(err => showAlert('บันทึกไม่ได้: ' + err.message, 'ผิดพลาด'));
     }
+
+    // Internal admin: promo request → pending_actions
+    if (e.target.dataset.action === 'promo-request') {
+      const id = e.target.dataset.id;
+      const itemName = e.target.dataset.name;
+      const val = e.target.value.trim();
+      const current = e.target.dataset.current;
+      if (val === current) return; // ไม่เปลี่ยน
+
+      const newPromo = val === '' ? null : parseFloat(val);
+      if (val !== '' && (isNaN(newPromo) || newPromo < 0)) return;
+
+      db.collection('pending_actions').doc().set({
+        type: 'promo_change', itemId: id, itemName,
+        newPromo, requestedBy: currentAdminName,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(() => {
+        showToast('ส่งคำขอเปลี่ยนโปร ' + itemName + ' แล้ว รอ owner อนุมัติ');
+        e.target.value = current; // revert to original
+      }).catch(err => showAlert('ส่งคำขอไม่ได้: ' + err.message, 'ผิดพลาด'));
+    }
   });
 
   // Event delegation สำหรับปุ่มในตารางสินค้า
@@ -566,6 +588,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (approveBtn) return approvePendingDelete(approveBtn.dataset.deleteId, approveBtn.dataset.itemId);
     const rejectBtn = e.target.closest('.btn-pending-reject');
     if (rejectBtn) return rejectPendingDelete(rejectBtn.dataset.deleteId);
+  });
+
+  // Event delegation สำหรับ pending actions (owner approve/reject)
+  document.getElementById('pendingActionsPanel').addEventListener('click', (e) => {
+    const approveBtn = e.target.closest('.btn-pending-approve');
+    if (approveBtn && approveBtn.dataset.actionId) return approvePendingAction(approveBtn.dataset.actionId);
+    const rejectBtn = e.target.closest('.btn-pending-reject');
+    if (rejectBtn && rejectBtn.dataset.actionId) return rejectPendingAction(rejectBtn.dataset.actionId);
   });
 
   // Event delegation สำหรับ order board
@@ -607,6 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof unsubAdminReservations !== 'undefined' && unsubAdminReservations) { unsubAdminReservations(); unsubAdminReservations = null; }
       if (typeof unsubPendingItems !== 'undefined' && unsubPendingItems) { unsubPendingItems(); unsubPendingItems = null; }
       if (typeof unsubPendingDeletes !== 'undefined' && unsubPendingDeletes) { unsubPendingDeletes(); unsubPendingDeletes = null; }
+      if (typeof unsubPendingActions !== 'undefined' && unsubPendingActions) { unsubPendingActions(); unsubPendingActions = null; }
     } else {
       if (currentAdminName) {
         if (!unsubOrders) loadOrders();
@@ -618,6 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof unsubAdminReservations !== 'undefined' && !unsubAdminReservations && typeof loadAdminReservations === 'function') loadAdminReservations();
         if (typeof unsubPendingItems !== 'undefined' && !unsubPendingItems && typeof loadPendingItems === 'function') loadPendingItems();
         if (typeof unsubPendingDeletes !== 'undefined' && !unsubPendingDeletes && typeof loadPendingDeletes === 'function') loadPendingDeletes();
+        if (typeof unsubPendingActions !== 'undefined' && !unsubPendingActions && typeof loadPendingActions === 'function') loadPendingActions();
       }
     }
   });
