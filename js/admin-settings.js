@@ -368,15 +368,44 @@ async function loadCompletedOrders() {
   }
 }
 
+let _externalDelayTimer = null;
+
 function processOrderSnapshot(snapshot, board) {
-  // External admin → กรองเฉพาะ order ที่มีสินค้าของตัวเอง
+  // External admin → กรองเฉพาะ order ที่มีสินค้าของตัวเอง + delay pending orders
   let docs = snapshot.docs;
+  let delayedCount = 0;
+  let nearestRevealMs = Infinity; // เวลาที่ order ถัดไปจะโผล่
   if (isExternal && typeof isMyProduct === 'function') {
     const myProductIds = new Set(allProducts.filter(p => isMyProduct(p)).map(p => p.id));
+    const delayMs = typeof getExternalOrderDelayMs === 'function' ? getExternalOrderDelayMs() : 120000;
+    const now = Date.now();
     docs = docs.filter(doc => {
-      const items = doc.data().items || [];
-      return items.some(i => myProductIds.has(i.itemId));
+      const data = doc.data();
+      const items = data.items || [];
+      if (!items.some(i => myProductIds.has(i.itemId))) return false;
+      // Delay: pending orders ที่ยังไม่ครบ delay → ซ่อน
+      if ((data.status || 'pending') === 'pending' && delayMs > 0 && data.createdAt) {
+        const age = now - data.createdAt.toMillis();
+        if (age < delayMs) {
+          delayedCount++;
+          const revealIn = delayMs - age;
+          if (revealIn < nearestRevealMs) nearestRevealMs = revealIn;
+          return false;
+        }
+      }
+      return true;
     });
+
+    // ตั้ง timer re-render เมื่อ order ถัดไปพ้น delay
+    if (_externalDelayTimer) clearTimeout(_externalDelayTimer);
+    if (nearestRevealMs < Infinity && nearestRevealMs > 0) {
+      _externalDelayTimer = setTimeout(() => {
+        if (_lastPendingSnapshot) {
+          const combined = { docs: [..._lastPendingSnapshot, ..._completedOrders] };
+          processOrderSnapshot(combined, board);
+        }
+      }, nearestRevealMs + 500); // +500ms buffer
+    }
   }
 
   // นับสถานะ
@@ -388,7 +417,7 @@ function processOrderSnapshot(snapshot, board) {
     else if (s === 'cancelled') cancelled++;
   });
 
-  document.getElementById('pendingCounter').textContent = 'รอดำเนินการ: ' + pending;
+  document.getElementById('pendingCounter').textContent = 'รอดำเนินการ: ' + pending + (delayedCount > 0 ? ` (+${delayedCount} รอคิว)` : '');
   document.getElementById('completedCounter').textContent = 'เสร็จแล้ว: ' + completed;
   document.getElementById('cancelledCounter').textContent = 'ยกเลิก: ' + cancelled;
 
@@ -858,5 +887,192 @@ function setupPayModeToggle() {
   document.getElementById('btnPayModeBoth').addEventListener('click', () => setPayMode('both'));
   document.getElementById('btnPayModePayOnly').addEventListener('click', () => setPayMode('pay_only'));
   document.getElementById('btnPayModeOrderOnly').addEventListener('click', () => setPayMode('order_only'));
+}
+
+// ============ COMMISSION TIERS (Owner only) ============
+// Default tiers ถ้ายังไม่เคยตั้ง
+const DEFAULT_TIERS = [
+  { maxPrice: 50, ownerPct: 30 },
+  { maxPrice: 100, ownerPct: 25 },
+  { maxPrice: 200, ownerPct: 20 },
+  { maxPrice: 0, ownerPct: 15 }  // 0 = ไม่จำกัด (201+)
+];
+
+let _commissionTiers = []; // cache สำหรับใช้ทั่วระบบ
+let _externalOrderDelay = 2; // นาที — delay ก่อนแอดนอกเห็น order
+
+function getExternalOrderDelayMs() {
+  return _externalOrderDelay * 60 * 1000;
+}
+
+function loadCommissionTiers() {
+  return db.collection('settings').doc('commission').get().then(doc => {
+    if (doc.exists) {
+      const data = doc.data();
+      if (Array.isArray(data.tiers) && data.tiers.length > 0) {
+        _commissionTiers = data.tiers;
+      } else {
+        _commissionTiers = DEFAULT_TIERS.map(t => ({ ...t }));
+      }
+      if (typeof data.externalOrderDelay === 'number') {
+        _externalOrderDelay = data.externalOrderDelay;
+      }
+    } else {
+      _commissionTiers = DEFAULT_TIERS.map(t => ({ ...t }));
+    }
+    renderCommissionTiers();
+  }).catch(() => {
+    _commissionTiers = DEFAULT_TIERS.map(t => ({ ...t }));
+    renderCommissionTiers();
+  });
+}
+
+function renderCommissionTiers() {
+  const container = document.getElementById('commissionTiersContainer');
+  if (!container) return;
+
+  container.innerHTML = `
+    <table class="admin-table" style="table-layout:fixed;">
+      <thead>
+        <tr>
+          <th style="width:40%;text-align:center;">ช่วงราคา (฿)</th>
+          <th style="width:25%;text-align:center;">Owner ได้ (%)</th>
+          <th style="width:25%;text-align:center;">แอดนอกได้ (%)</th>
+          <th style="width:10%;text-align:center;"></th>
+        </tr>
+      </thead>
+      <tbody id="commissionTiersBody">
+        ${_commissionTiers.map((tier, i) => {
+          const prevMax = i > 0 ? _commissionTiers[i - 1].maxPrice : 0;
+          const rangeText = tier.maxPrice > 0 ? `${prevMax + 1} - ${tier.maxPrice}` : `${prevMax + 1}+`;
+          return `
+            <tr>
+              <td style="text-align:center;">
+                ${tier.maxPrice > 0
+                  ? `<input type="number" class="tier-max-input" data-idx="${i}" value="${tier.maxPrice}" min="1">`
+                  : `<span style="color:#aaa;">${prevMax + 1}+ (ไม่จำกัด)</span>`}
+              </td>
+              <td style="text-align:center;">
+                <input type="number" class="tier-pct-input" data-idx="${i}" value="${tier.ownerPct}" min="0" max="100">%
+              </td>
+              <td style="text-align:center;color:#4CAF50;font-weight:600;">
+                ${100 - tier.ownerPct}%
+              </td>
+              <td style="text-align:center;">
+                ${tier.maxPrice > 0 ? `<button class="btn-icon btn-icon-danger" data-remove-tier="${i}" title="ลบ">&times;</button>` : ''}
+              </td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+    <div style="margin-top:8px;padding:10px;background:rgba(0,0,0,0.2);border-radius:8px;">
+      <div style="font-size:12px;color:#aaa;margin-bottom:6px;">ตัวอย่าง:</div>
+      <div id="tierExamples" style="font-size:13px;color:#e0b0ff;"></div>
+    </div>
+    <div style="margin-top:12px;padding:10px;background:rgba(0,0,0,0.2);border-radius:8px;">
+      <label style="font-size:13px;color:#aaa;">Delay order แอดนอก (ให้ internal ส่งก่อน)</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <input type="number" id="externalDelayInput" value="${_externalOrderDelay}" min="0" max="30">
+        <span style="color:#aaa;font-size:13px;">นาที</span>
+        <span style="color:#666;font-size:11px;">(0 = ไม่ delay)</span>
+      </div>
+    </div>
+  `;
+
+  updateTierExamples();
+
+  // Event: ลบ tier
+  container.querySelectorAll('[data-remove-tier]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.removeTier);
+      _commissionTiers.splice(idx, 1);
+      renderCommissionTiers();
+    });
+  });
+
+  // Event: เปลี่ยนค่า → อัปเดต preview
+  container.querySelectorAll('.tier-max-input, .tier-pct-input').forEach(input => {
+    input.addEventListener('input', () => {
+      const idx = parseInt(input.dataset.idx);
+      if (input.classList.contains('tier-max-input')) {
+        _commissionTiers[idx].maxPrice = parseInt(input.value) || 0;
+      } else {
+        _commissionTiers[idx].ownerPct = parseFloat(input.value) || 0;
+      }
+      updateTierExamples();
+    });
+  });
+}
+
+function updateTierExamples() {
+  const el = document.getElementById('tierExamples');
+  if (!el) return;
+  const examples = [15, 50, 100, 150, 200, 250, 500];
+  el.innerHTML = examples.map(price => {
+    const rate = calcOwnerPct(price);
+    const ownerGets = Math.round(price * rate / 100);
+    const extGets = price - ownerGets;
+    return `<span style="margin-right:12px;">${price}฿ → Owner ${ownerGets}฿ · แอดนอก ${extGets}฿ <span style="color:#aaa;">(${rate}%)</span></span>`;
+  }).join('<br>');
+}
+
+// คำนวณ % ที่ Owner ได้จากราคาสินค้า
+function calcOwnerPct(price) {
+  const tiers = _commissionTiers.length > 0 ? _commissionTiers : DEFAULT_TIERS;
+  for (const tier of tiers) {
+    if (tier.maxPrice > 0 && price <= tier.maxPrice) return tier.ownerPct;
+  }
+  // ถ้าเกินทุก tier → ใช้ tier สุดท้าย (maxPrice = 0)
+  const last = tiers[tiers.length - 1];
+  return last ? last.ownerPct : 20;
+}
+
+// คำนวณ externalCut จากราคา
+function calcExternalCut(price) {
+  const ownerPct = calcOwnerPct(price);
+  return Math.round(price * (100 - ownerPct) / 100);
+}
+
+function setupCommissionTiers() {
+  const addBtn = document.getElementById('addTierBtn');
+  const saveBtn = document.getElementById('saveTiersBtn');
+  if (!addBtn || !saveBtn) return;
+
+  addBtn.addEventListener('click', () => {
+    // เพิ่ม tier ก่อน tier สุดท้าย (tier สุดท้ายคือ maxPrice=0)
+    const lastIdx = _commissionTiers.length - 1;
+    const prevMax = lastIdx > 0 ? _commissionTiers[lastIdx - 1].maxPrice : 50;
+    _commissionTiers.splice(lastIdx, 0, { maxPrice: prevMax + 100, ownerPct: 20 });
+    renderCommissionTiers();
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    // Validate: maxPrice ต้องเรียงจากน้อยไปมาก
+    for (let i = 0; i < _commissionTiers.length - 1; i++) {
+      if (_commissionTiers[i].maxPrice <= 0) {
+        showAlert('ช่วงราคาต้องมากกว่า 0 (ยกเว้นขั้นสุดท้าย)');
+        return;
+      }
+      if (i > 0 && _commissionTiers[i].maxPrice <= _commissionTiers[i - 1].maxPrice) {
+        showAlert('ช่วงราคาต้องเรียงจากน้อยไปมาก');
+        return;
+      }
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'กำลังบันทึก...';
+    try {
+      const delayInput = document.getElementById('externalDelayInput');
+      _externalOrderDelay = parseInt(delayInput ? delayInput.value : '2') || 0;
+      await db.collection('settings').doc('commission').set({ tiers: _commissionTiers, externalOrderDelay: _externalOrderDelay });
+      showToast('บันทึกอัตราค่า com แล้ว');
+    } catch (e) {
+      showAlert('บันทึกไม่ได้: ' + e.message, 'ผิดพลาด');
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'บันทึก';
+    }
+  });
 }
 
