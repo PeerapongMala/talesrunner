@@ -379,6 +379,11 @@ function processOrderSnapshot(snapshot, board) {
     const myProductIds = new Set(allProducts.filter(p => isMyProduct(p)).map(p => p.id));
     const delayMs = typeof getExternalOrderDelayMs === 'function' ? getExternalOrderDelayMs() : 120000;
     const now = Date.now();
+    // ถ้า allProducts ยังไม่โหลด → ข้ามการกรอง รอ products โหลดแล้ว re-render
+    if (myProductIds.size === 0 && allProducts.length === 0) {
+      console.log('[orders] allProducts ยังไม่โหลด — รอ re-render');
+      return;
+    }
     docs = docs.filter(doc => {
       const data = doc.data();
       const items = data.items || [];
