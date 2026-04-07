@@ -75,20 +75,26 @@ function processProductSnapshot(snapshot) {
       }
     }
 
-    // External admin → แสดงเฉพาะสินค้าที่ตัวเองมี adminStock หรือ shared
-    const visibleProducts = isExternal ? allProducts.filter(item => isMyProduct(item)) : allProducts;
+    // External admin → แบ่ง 2 กลุ่ม: แชร์กับคุณ / ไม่แชร์
+    let sharedProducts, notSharedProducts = [];
+    if (isExternal) {
+      sharedProducts = allProducts.filter(item => isMyProduct(item));
+      notSharedProducts = allProducts.filter(item => !isMyProduct(item));
+    } else {
+      sharedProducts = allProducts;
+    }
 
-    // Pagination
-    const totalPages = Math.max(1, Math.ceil(visibleProducts.length / PRODUCTS_PER_PAGE));
+    // Pagination (เฉพาะ sharedProducts)
+    const totalPages = Math.max(1, Math.ceil(sharedProducts.length / PRODUCTS_PER_PAGE));
     if (productPage > totalPages) productPage = totalPages;
     const startIdx = (productPage - 1) * PRODUCTS_PER_PAGE;
-    const pageProducts = visibleProducts.slice(startIdx, startIdx + PRODUCTS_PER_PAGE);
+    const pageProducts = sharedProducts.slice(startIdx, startIdx + PRODUCTS_PER_PAGE);
 
-    tbody.innerHTML = pageProducts.map((item, i) => {
-      const index = startIdx + i;
+    function renderRow(item, index, disabled) {
       const isActive = item.active !== false;
+      const rowStyle = disabled ? 'opacity:0.35;pointer-events:none;background:rgba(0,0,0,0.2);' : (!isActive ? 'opacity:0.4;' : '');
       return `
-        <tr draggable="true" data-id="${item.id}" style="${!isActive ? 'opacity:0.4;' : ''}">
+        <tr draggable="${disabled ? 'false' : 'true'}" data-id="${item.id}" style="${rowStyle}">
           <td style="text-align:center;"><span class="drag-handle">☰</span> <span style="color:#e0b0ff;font-weight:600;">${index + 1}</span></td>
           <td><img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22><rect fill=%22%23333%22 width=%2250%22 height=%2250%22/></svg>'"></td>
           <td>
@@ -116,7 +122,21 @@ function processProductSnapshot(snapshot) {
           </td>
         </tr>
       `;
-    }).join('');
+    }
+
+    // Build HTML
+    let html = '';
+    if (isExternal && sharedProducts.length > 0) {
+      html += `<tr><td colspan="10" style="background:rgba(76,175,80,0.15);color:#4CAF50;font-weight:700;padding:10px 12px;font-size:13px;border-bottom:2px solid #4CAF50;">แชร์กับคุณ (${sharedProducts.length} รายการ)</td></tr>`;
+    }
+    html += pageProducts.map((item, i) => renderRow(item, startIdx + i, false)).join('');
+
+    if (isExternal && notSharedProducts.length > 0) {
+      html += `<tr><td colspan="10" style="background:rgba(150,150,150,0.15);color:#888;font-weight:700;padding:10px 12px;font-size:13px;border-top:3px solid #555;border-bottom:2px solid #555;">ไม่ได้แชร์ (${notSharedProducts.length} รายการ)</td></tr>`;
+      html += notSharedProducts.map((item, i) => renderRow(item, sharedProducts.length + i, true)).join('');
+    }
+
+    tbody.innerHTML = html;
 
     // Restore active accum badges after re-render
     Object.keys(stockAccum).forEach(id => {
@@ -124,7 +144,7 @@ function processProductSnapshot(snapshot) {
     });
 
     // Render pagination
-    renderProductPagination(totalPages, visibleProducts.length);
+    renderProductPagination(totalPages, sharedProducts.length);
 }
 
 function renderProductPagination(totalPages, totalCount) {
@@ -218,7 +238,7 @@ async function flushStockAccum(itemId, itemName) {
     if (typeof handleQuotaError === 'function' && handleQuotaError(e, 'stockAdjust')) {
       // handled
     } else if (e.message.startsWith('stock ไม่พอ')) {
-      showToast(`${itemName} ${e.message}`);
+      showAlert(`${itemName}: ${e.message}`, 'stock ไม่พอ');
     } else {
       showAlert('แก้ stock ไม่ได้: ' + e.message, 'ผิดพลาด');
     }
@@ -360,13 +380,18 @@ async function openStockHistory(itemId, itemName) {
     // สรุปยอดแต่ละคน — เพิ่ม / ส่งของ / คงเหลือ (ตามจริง)
     const adminAdded = {};     // ยอดเพิ่ม (+) ของแต่ละ admin
     const adminDelivered = {}; // ยอดส่ง (-) ของแต่ละ admin
+    const adminRawKeys = {};   // map resolvedName → Set of raw addedBy values
     let historyTotal = 0;
 
     snapshot.docs.forEach(doc => {
       const h = doc.data();
-      const who = typeof resolveAdminName === 'function' ? resolveAdminName(h.addedBy) : (h.addedBy || 'ไม่ระบุ');
+      const raw = h.addedBy || 'ไม่ระบุ';
+      const who = typeof resolveAdminName === 'function' ? resolveAdminName(raw) : raw;
       const qty = h.qty || 0;
       historyTotal += qty;
+
+      if (!adminRawKeys[who]) adminRawKeys[who] = new Set();
+      adminRawKeys[who].add(raw);
 
       if (qty > 0) {
         adminAdded[who] = (adminAdded[who] || 0) + qty;
@@ -430,6 +455,7 @@ async function openStockHistory(itemId, itemName) {
             <span>${escapeHtml(a.name)}</span>
             <span style="font-size:11px;color:#aaa;">เพิ่ม +${a.added}${a.delivered ? ' / ส่ง -' + a.delivered : ''}</span>
             <span style="color:${a.net >= 0 ? '#4caf50' : '#ff4444'};font-weight:700;">${a.net >= 0 ? '+' : ''}${a.net}</span>
+            ${isOwner ? `<button class="btn-icon btn-icon-danger" style="font-size:10px;padding:2px 6px;margin-left:4px;" data-action="deleteAdminHistory" data-item-id="${itemId}" data-raw-keys="${escapeHtml([...adminRawKeys[a.name]].join('||'))}" data-name="${escapeHtml(a.name)}" title="ลบประวัติ ${escapeHtml(a.name)}">x</button>` : ''}
           </div>`
         ).join('')}
         ${pending > 0 ? `<div class="stock-summary-item" style="color:#ff9800;">
@@ -860,6 +886,13 @@ async function addProduct() {
   if (!addedBy) { showFieldError('pAddedByError', 'กรุณากรอกชื่อคนเพิ่ม'); hasError = true; }
   if (hasError) return;
 
+  // เช็คชื่อซ้ำ
+  const dupItem = allProducts.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
+  if (dupItem) {
+    showAlert('สินค้าชื่อ "' + name + '" มีอยู่แล้วในระบบ', 'ชื่อซ้ำ');
+    return;
+  }
+
   const btn = document.getElementById('addProductBtn');
   btn.disabled = true;
   btn.textContent = 'กำลังเพิ่ม...';
@@ -1078,7 +1111,7 @@ async function toggleItemActive(itemId, currentActive) {
     try {
       const docId = 'toggle_active_' + itemId;
       const existing = await db.collection('pending_actions').doc(docId).get();
-      if (existing.exists) { showToast('คำขอนี้รออนุมัติอยู่แล้ว'); return; }
+      if (existing.exists) { showAlert('คำขอนี้รออนุมัติอยู่แล้ว', 'ซ้ำ'); return; }
       await db.collection('pending_actions').doc(docId).set({
         type: 'toggle_active', itemId, itemName: item ? item.name : itemId,
         newValue: !currentActive, requestedBy: currentAdminName,
@@ -1551,6 +1584,14 @@ async function approvePendingItem(pendingId) {
     if (!doc.exists) { showToast('คำขอนี้ถูกจัดการแล้ว'); return; }
     const data = doc.data();
     delete data.submittedBy;
+
+    // เช็คชื่อซ้ำก่อนอนุมัติ
+    const dupItem = allProducts.find(p => p.name.trim().toLowerCase() === (data.name || '').trim().toLowerCase());
+    if (dupItem) {
+      showAlert('สินค้าชื่อ "' + data.name + '" มีอยู่แล้ว — ปฏิเสธอัตโนมัติ', 'ชื่อซ้ำ');
+      await db.collection('pending_items').doc(pendingId).delete();
+      return;
+    }
 
     const docRef = db.collection('items').doc();
     const batch = db.batch();

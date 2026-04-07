@@ -282,6 +282,7 @@ function setupLogin() {
   passInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') tryLogin();
   });
+
 }
 
 // ============ INIT SORT ORDER (ให้ item เก่าที่ยังไม่มี sortOrder) ============
@@ -573,6 +574,31 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (action === 'toggleActive') toggleItemActive(id, btn.dataset.active === 'true');
     else if (action === 'edit') openEditProductModal(id, name, Number(price), image);
     else if (action === 'delete') deleteProduct(id);
+  });
+
+  // Event delegation สำหรับลบประวัติ stock ของ admin
+  document.getElementById('stockHistorySummary').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action="deleteAdminHistory"]');
+    if (!btn) return;
+    const { itemId, rawKeys, name } = btn.dataset;
+    if (!await showConfirm('ลบประวัติ Stock ทั้งหมดของ "' + name + '" ในสินค้านี้?', 'ยืนยันลบ')) return;
+    try {
+      const keys = rawKeys.split('||');
+      const histSnap = await db.collection('items').doc(itemId).collection('stockHistory').get();
+      const batch = db.batch();
+      let count = 0;
+      histSnap.docs.forEach(doc => {
+        if (keys.includes(doc.data().addedBy || '')) {
+          batch.delete(doc.ref);
+          count++;
+        }
+      });
+      if (count > 0) await batch.commit();
+      showToast('ลบประวัติ ' + name + ' แล้ว (' + count + ' รายการ)');
+      // refresh modal
+      const itemName = document.getElementById('stockHistoryModal').querySelector('h2')?.textContent?.replace('ประวัติ Stock', '').trim() || '';
+      openStockHistory(itemId, itemName);
+    } catch (e) { showAlert('ลบไม่ได้: ' + e.message, 'ผิดพลาด'); }
   });
 
   // Event delegation สำหรับ pending items (owner approve/reject)
