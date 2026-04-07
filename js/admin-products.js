@@ -82,14 +82,14 @@ function processProductSnapshot(snapshot) {
             <div class="product-name-row">
               <span>${escapeHtml(item.name)}${item.bundleQty > 1 ? ` <span style="color:#ff9800;font-size:11px;">(ชุดละ ${item.bundleQty})</span>` : ''}</span>
               <span class="product-badges">
-                ${isOwner ? `<button class="badge-btn" data-action="toggleShare" data-id="${item.id}" data-shared="${!!item.sharedWithExternal}" title="${item.sharedWithExternal ? 'ยกเลิกแชร์กับภายนอก' : 'แชร์ให้แอดมินภายนอกเห็น'}" style="color:${item.sharedWithExternal ? '#ff9800' : '#555'}">${item.sharedWithExternal ? '🔗' : '🔒'}</button>` : ''}
-                ${isOwner ? `<button class="badge-btn" data-action="toggleActive" data-id="${item.id}" data-active="${isActive}" title="${isActive ? 'ปิดสินค้า' : 'เปิดสินค้า'}" style="color:${isActive ? '#4CAF50' : '#ff4444'}">${isActive ? '👁' : '🚫'}</button>` : `<span style="color:${isActive ? '#4CAF50' : '#ff4444'};font-size:13px;">${isActive ? '👁' : '🚫'}</span>`}
+                ${(isOwner || isExternal) ? `<button class="badge-btn" data-action="toggleShare" data-id="${item.id}" data-shared="${!!item.sharedWithExternal}" title="${item.sharedWithExternal ? 'ยกเลิกแชร์กับภายนอก' : 'แชร์ให้แอดมินภายนอกเห็น'}" style="color:${item.sharedWithExternal ? '#ff9800' : '#555'}">${item.sharedWithExternal ? '🔗' : '🔒'}</button>` : ''}
+                ${(isOwner || isExternal) ? `<button class="badge-btn" data-action="toggleActive" data-id="${item.id}" data-active="${isActive}" title="${isActive ? 'ปิดสินค้า' : 'เปิดสินค้า'}" style="color:${isActive ? '#4CAF50' : '#ff4444'}">${isActive ? '👁' : '🚫'}</button>` : `<span style="color:${isActive ? '#4CAF50' : '#ff4444'};font-size:13px;">${isActive ? '👁' : '🚫'}</span>`}
               </span>
             </div>
           </td>
           <td style="text-align:center;">${formatPrice(item.price)} บาท</td>
           <td style="text-align:center;">
-            ${isOwner ? `<input type="number" step="any" min="0" class="promo-input" data-action="promo" data-id="${item.id}" data-external-cut="${item.externalCut || 0}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-">` : `<span style="color:#ff9800;">${item.promoPrice != null ? formatPrice(item.promoPrice) : '-'}</span>`}
+            ${isOwner ? `<input type="number" step="any" min="0" class="promo-input" data-action="promo" data-id="${item.id}" data-external-cut="${item.externalCut || 0}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-">` : (!isExternal ? `<input type="number" step="any" min="0" class="promo-input" data-action="promo-request" data-id="${item.id}" data-name="${escapeHtml(item.name)}" data-current="${item.promoPrice != null ? item.promoPrice : ''}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-" style="border-color:rgba(255,152,0,0.4);">` : `<span style="color:#ff9800;">${item.promoPrice != null ? formatPrice(item.promoPrice) : '-'}</span>`)}
             ${isOwner && item.externalCut ? (() => { const ec = item.externalCut; const sellPrice = item.promoPrice != null ? item.promoPrice : item.price; const ownerNet = sellPrice - ec; return `<div style="font-size:10px;color:#aaa;margin-top:2px;">แอดนอก ${formatPrice(ec)} ฿ · Owner ${formatPrice(ownerNet)} ฿${ownerNet < 0 ? ' <span style="color:#ff4444;">ขาดทุน!</span>' : ''}</div>`; })() : ''}
             ${isExternal && typeof calcExternalCut === 'function' ? (() => { const sellPrice = item.promoPrice != null ? item.promoPrice : item.price; const ec = item.externalCut || calcExternalCut(sellPrice); return `<div style="font-size:10px;color:#4CAF50;margin-top:2px;">คุณได้ ${formatPrice(ec)} ฿</div>`; })() : ''}
           </td>
@@ -1027,22 +1027,47 @@ async function confirmEditProduct() {
 
 // ============ TOGGLE SHARE WITH EXTERNAL ============
 async function toggleShareExternal(itemId, currentShared) {
-  try {
-    await db.collection('items').doc(itemId).update({ sharedWithExternal: !currentShared });
-    showToast(!currentShared ? 'แชร์สินค้าให้แอดมินภายนอกเห็นแล้ว' : 'ยกเลิกแชร์กับแอดมินภายนอกแล้ว');
-  } catch (e) {
-    showAlert('เปลี่ยนสถานะไม่ได้: ' + e.message, 'ผิดพลาด');
+  if (isOwner) {
+    try {
+      await db.collection('items').doc(itemId).update({ sharedWithExternal: !currentShared });
+      showToast(!currentShared ? 'แชร์สินค้าให้แอดมินภายนอกเห็นแล้ว' : 'ยกเลิกแชร์กับแอดมินภายนอกแล้ว');
+    } catch (e) {
+      showAlert('เปลี่ยนสถานะไม่ได้: ' + e.message, 'ผิดพลาด');
+    }
+  } else {
+    // Non-owner → ส่งคำขอ
+    const item = allProducts.find(p => p.id === itemId);
+    try {
+      await db.collection('pending_actions').doc().set({
+        type: 'toggle_share', itemId, itemName: item ? item.name : itemId,
+        newValue: !currentShared, requestedBy: currentAdminName,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast('ส่งคำขอ' + (!currentShared ? 'แชร์' : 'ยกเลิกแชร์') + 'แล้ว รอ owner อนุมัติ');
+    } catch (e) { showAlert('ส่งคำขอไม่ได้: ' + e.message, 'ผิดพลาด'); }
   }
 }
 
 // ============ TOGGLE ITEM ACTIVE ============
 async function toggleItemActive(itemId, currentActive) {
-  if (!isOwner) { showToast('เฉพาะ owner เปิด/ปิดสินค้าได้'); return; }
-  try {
-    await db.collection('items').doc(itemId).update({ active: !currentActive });
-    showToast(!currentActive ? 'เปิดสินค้าแล้ว' : 'ปิดสินค้าแล้ว (ลูกค้าจะไม่เห็น)');
-  } catch (e) {
-    showAlert('เปลี่ยนสถานะไม่ได้: ' + e.message, 'ผิดพลาด');
+  if (isOwner) {
+    try {
+      await db.collection('items').doc(itemId).update({ active: !currentActive });
+      showToast(!currentActive ? 'เปิดสินค้าแล้ว' : 'ปิดสินค้าแล้ว (ลูกค้าจะไม่เห็น)');
+    } catch (e) {
+      showAlert('เปลี่ยนสถานะไม่ได้: ' + e.message, 'ผิดพลาด');
+    }
+  } else {
+    // Non-owner → ส่งคำขอ
+    const item = allProducts.find(p => p.id === itemId);
+    try {
+      await db.collection('pending_actions').doc().set({
+        type: 'toggle_active', itemId, itemName: item ? item.name : itemId,
+        newValue: !currentActive, requestedBy: currentAdminName,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast('ส่งคำขอ' + (!currentActive ? 'เปิด' : 'ปิด') + 'สินค้าแล้ว รอ owner อนุมัติ');
+    } catch (e) { showAlert('ส่งคำขอไม่ได้: ' + e.message, 'ผิดพลาด'); }
   }
 }
 
@@ -1206,12 +1231,25 @@ async function addCategory() {
   const name = input.value.trim();
   if (!name) return;
 
-  const id = 'cat_' + Date.now();
-  adminCategoriesList.push({ id, name, order: adminCategoriesList.length });
-  await saveCategories();
-  input.value = '';
-  renderCategoryList();
-  showToast('เพิ่มหมวดหมู่ "' + name + '" แล้ว');
+  if (isOwner) {
+    const id = 'cat_' + Date.now();
+    adminCategoriesList.push({ id, name, order: adminCategoriesList.length });
+    await saveCategories();
+    input.value = '';
+    renderCategoryList();
+    showToast('เพิ่มหมวดหมู่ "' + name + '" แล้ว');
+  } else {
+    // Non-owner → ส่งคำขอ
+    try {
+      await db.collection('pending_actions').doc().set({
+        type: 'category_add', categoryName: name,
+        requestedBy: currentAdminName,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      input.value = '';
+      showToast('ส่งคำขอเพิ่มหมวดหมู่ "' + name + '" แล้ว รอ owner อนุมัติ');
+    } catch (e) { showAlert('ส่งคำขอไม่ได้: ' + e.message, 'ผิดพลาด'); }
+  }
 }
 
 let renameCatIndex = null;
@@ -1588,6 +1626,121 @@ async function rejectPendingDelete(pendingDeleteId) {
   try {
     await db.collection('pending_deletes').doc(pendingDeleteId).delete();
     showToast('ปฏิเสธคำขอลบแล้ว');
+  } catch (e) {
+    showAlert('ปฏิเสธไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+// ============ PENDING ACTIONS (unified approval system) ============
+let unsubPendingActions = null;
+
+function loadPendingActions() {
+  if (!isOwner) return;
+  if (unsubPendingActions) { unsubPendingActions(); unsubPendingActions = null; }
+
+  unsubPendingActions = db.collection('pending_actions').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+    renderPendingActions(snapshot.docs);
+  }, e => {
+    console.warn('pending_actions listener:', e.message);
+  });
+}
+
+function renderPendingActions(docs) {
+  const container = document.getElementById('pendingActionsPanel');
+  if (!container) return;
+
+  if (docs.length === 0) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  const typeLabels = {
+    toggle_share: '🔗 แชร์/ยกเลิกแชร์',
+    toggle_active: '👁 เปิด/ปิดสินค้า',
+    promo_change: '💰 เปลี่ยนราคาโปร',
+    category_add: '📁 เพิ่มหมวดหมู่'
+  };
+
+  container.style.display = 'block';
+  container.innerHTML = `
+    <div class="pending-items-header" style="color:#4fc3f7;">รอ Owner อนุมัติ (${docs.length})</div>
+    ${docs.map(doc => {
+      const d = doc.data();
+      const typeLabel = typeLabels[d.type] || d.type;
+      let detail = '';
+      if (d.type === 'toggle_share') {
+        detail = `${escapeHtml(d.itemName)} → ${d.newValue ? 'แชร์' : 'ยกเลิกแชร์'}`;
+      } else if (d.type === 'toggle_active') {
+        detail = `${escapeHtml(d.itemName)} → ${d.newValue ? 'เปิด' : 'ปิด'}`;
+      } else if (d.type === 'promo_change') {
+        detail = `${escapeHtml(d.itemName)} → ${d.newPromo !== null ? formatPrice(d.newPromo) + ' ฿' : 'ลบราคาโปร'}`;
+      } else if (d.type === 'category_add') {
+        detail = `เพิ่ม "${escapeHtml(d.categoryName)}"`;
+      }
+      return `
+        <div class="pending-item-card" style="border-color:rgba(79,195,247,0.3);">
+          <div class="pending-item-info" style="flex:1;">
+            <div class="pending-item-name">${typeLabel}</div>
+            <div class="pending-item-detail">${detail}</div>
+            <div class="pending-item-detail" style="color:#888;">โดย ${escapeHtml(d.requestedBy || '?')}</div>
+          </div>
+          <div class="pending-item-actions">
+            <button class="btn-pending-approve" data-action-id="${doc.id}">อนุมัติ</button>
+            <button class="btn-pending-reject" data-action-id="${doc.id}">ปฏิเสธ</button>
+          </div>
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+async function approvePendingAction(actionId) {
+  const doc = await db.collection('pending_actions').doc(actionId).get();
+  if (!doc.exists) { showToast('ไม่พบคำขอนี้แล้ว'); return; }
+  const d = doc.data();
+
+  try {
+    if (d.type === 'toggle_share') {
+      await db.collection('items').doc(d.itemId).update({ sharedWithExternal: d.newValue });
+      showToast((d.newValue ? 'แชร์' : 'ยกเลิกแชร์') + ' ' + d.itemName + ' แล้ว');
+    } else if (d.type === 'toggle_active') {
+      await db.collection('items').doc(d.itemId).update({ active: d.newValue });
+      showToast((d.newValue ? 'เปิด' : 'ปิด') + 'สินค้า ' + d.itemName + ' แล้ว');
+    } else if (d.type === 'promo_change') {
+      const updateData = {};
+      if (d.newPromo === null) {
+        updateData.promoPrice = firebase.firestore.FieldValue.delete();
+        updateData.promoExpiresAt = firebase.firestore.FieldValue.delete();
+      } else {
+        updateData.promoPrice = d.newPromo;
+        if (typeof getNextCloseTime === 'function') {
+          updateData.promoExpiresAt = firebase.firestore.Timestamp.fromDate(getNextCloseTime());
+        }
+      }
+      await db.collection('items').doc(d.itemId).update(updateData);
+      showToast('ตั้งราคาโปร ' + d.itemName + ' แล้ว');
+    } else if (d.type === 'category_add') {
+      // Reload latest categories then add
+      const catDoc = await db.collection('settings').doc('categories').get();
+      const list = (catDoc.exists && Array.isArray(catDoc.data().list)) ? catDoc.data().list : [];
+      if (!list.some(c => c.name === d.categoryName)) {
+        list.push({ id: 'cat_' + Date.now(), name: d.categoryName, order: list.length });
+        await db.collection('settings').doc('categories').set({ list });
+        adminCategoriesList = list;
+      }
+      showToast('เพิ่มหมวดหมู่ "' + d.categoryName + '" แล้ว');
+    }
+    await db.collection('pending_actions').doc(actionId).delete();
+  } catch (e) {
+    showAlert('อนุมัติไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+async function rejectPendingAction(actionId) {
+  try {
+    await db.collection('pending_actions').doc(actionId).delete();
+    showToast('ปฏิเสธคำขอแล้ว');
   } catch (e) {
     showAlert('ปฏิเสธไม่ได้: ' + e.message, 'ผิดพลาด');
   }
