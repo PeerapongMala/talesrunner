@@ -57,8 +57,8 @@ function openSummaryModal() {
   document.getElementById("qrCodeImg").src = `https://promptpay.io/${currentPromptPay}/${total}.png`;
   document.getElementById("qrCodeText").textContent = `โอนเข้าพร้อมเพย์: ${currentPromptPay}`;
 
-  document.getElementById("inputFb").value = localStorage.getItem("savedFb") || "";
-  document.getElementById("inputCharName").value = localStorage.getItem("savedCharName") || "";
+  document.getElementById("inputFb").value = "";
+  document.getElementById("inputCharName").value = "";
   document.getElementById("confirmCheckbox").checked = false;
   document.getElementById("summaryModal").classList.add("active");
 }

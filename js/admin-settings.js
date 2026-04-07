@@ -65,6 +65,16 @@ function loadAdminRoles() {
 }
 
 async function approveAdminRole(uid, email) {
+  // เช็ค email ซ้ำใน admin_users
+  try {
+    const existing = await db.collection('admin_users').where('email', '==', email).get();
+    if (!existing.empty) {
+      showAlert('Email ' + email + ' มีสิทธิ์แอดมินอยู่แล้ว — ลบคำขอนี้ออก', 'ซ้ำ');
+      await db.collection('pending_users').doc(uid).delete();
+      return;
+    }
+  } catch (e) { /* ถ้าเช็คไม่ได้ ให้ไปต่อ */ }
+
   // ให้ owner เลือก role
   const role = await pickAdminRole(email);
   if (!role) return;
