@@ -74,8 +74,6 @@ body {
   gap: 16px;
   position: sticky;
   top: 20px;
-  max-height: calc(100vh - 120px);
-  overflow-y: auto;
 }
 
 /* ============ TIPS PANEL ============ */
