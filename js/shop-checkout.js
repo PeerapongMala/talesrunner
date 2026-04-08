@@ -287,6 +287,7 @@ async function submitOrder() {
       const itemDocs = docs;
       let rawTotalPrice = 0;
       const orderItems = [];
+      const stockAdjustments = []; // เก็บ item ที่ stock ไม่พอ
 
       for (let i = 0; i < itemDocs.length; i++) {
         const doc = itemDocs[i];
@@ -304,7 +305,13 @@ async function submitOrder() {
 
         if (serverStock < actualQty) {
           const serverBundleCount = Math.floor(serverStock / serverBq);
-          throw new Error(`${cartItems[i].name} เหลือแค่ ${serverBq > 1 ? serverBundleCount + ' ชุด' : serverStock + ' ชิ้น'}`);
+          stockAdjustments.push({
+            itemId: cartItems[i].itemId,
+            name: cartItems[i].name,
+            requested: cartItems[i].bundles,
+            available: serverBundleCount,
+            bq: serverBq
+          });
         }
 
         const subtotal = serverPrice * actualQty;
@@ -320,6 +327,13 @@ async function submitOrder() {
         };
         if (serverBq > 1) oi.bundleQty = serverBq;
         orderItems.push(oi);
+      }
+
+      // ถ้ามี item ที่ stock ไม่พอ → throw เพื่อให้ catch จัดการ
+      if (stockAdjustments.length > 0) {
+        const err = new Error('STOCK_INSUFFICIENT');
+        err._stockAdjustments = stockAdjustments;
+        throw err;
       }
 
       // คำนวณส่วนลด
@@ -384,6 +398,9 @@ async function submitOrder() {
     localStorage.setItem("savedFb", fb);
     localStorage.setItem("savedCharName", charName);
 
+    // แจ้งเตือน Discord
+    notifyDiscord(fb, charName, cartItems, entries);
+
     // สำเร็จ — ลบ reservation
     if (typeof deleteReservation === 'function') deleteReservation();
     closeSummaryModal();
@@ -391,12 +408,97 @@ async function submitOrder() {
     renderCart();
     document.getElementById("successModal").classList.add("active");
   } catch (e) {
-    if (!handleQuotaError(e, 'submitOrder')) {
+    if (e.message === 'STOCK_INSUFFICIENT' && e._stockAdjustments) {
+      // สร้างข้อความแจ้งว่าสินค้าไหนไม่พอ
+      const lines = e._stockAdjustments.map(a => {
+        const unit = a.bq > 1 ? 'ชุด' : 'ชิ้น';
+        if (a.available <= 0) return `• ${a.name} — หมดแล้ว (ลบออกจากตะกร้า)`;
+        return `• ${a.name} — เหลือ ${a.available} ${unit} (สั่งไว้ ${a.requested} ${unit})`;
+      }).join('\n');
+
+      const hasAny = e._stockAdjustments.some(a => a.available > 0);
+      const msg = `สินค้าบางรายการถูกคนอื่นสั่งไปแล้ว:\n\n${lines}\n\n${hasAny ? 'ปรับจำนวนในตะกร้าให้เท่าที่เหลือ?' : 'สินค้าหมดทุกรายการที่มีปัญหา'}`;
+
+      const yes = await showConfirm(msg, 'Stock ไม่พอ');
+      if (yes) {
+        for (const a of e._stockAdjustments) {
+          if (a.available <= 0) {
+            delete cart[a.itemId];
+          } else {
+            if (cart[a.itemId]) cart[a.itemId].qty = a.available;
+          }
+        }
+        renderCart();
+        if (typeof syncReservation === 'function') syncReservation();
+        // อัปเดต summary modal ถ้ายังเปิดอยู่
+        if (Object.keys(cart).length > 0) {
+          refreshSummary();
+          showToast('ปรับจำนวนแล้ว — กดสั่งซื้อใหม่ได้เลย');
+        } else {
+          closeSummaryModal();
+          showAlert('สินค้าหมดทั้งหมด ไม่มีของในตะกร้าแล้ว', 'ตะกร้าว่าง');
+        }
+      }
+    } else if (!handleQuotaError(e, 'submitOrder')) {
       showAlert("เกิดข้อผิดพลาด: " + e.message, "ผิดพลาด");
     }
   } finally {
     confirmBtn.disabled = false;
     confirmBtn.textContent = "ยืนยันสั่งซื้อ";
+  }
+}
+
+// ============ DISCORD NOTIFICATION ============
+const DISCORD_WEBHOOK_OWNER = 'https://discord.com/api/webhooks/1491376386022310068/fpSb3PFwk9333x9MFrEIpnuAzbspLY3u278y90WwK6BRtvuZAWbx6y8u7A5yOpZTO-dO';
+const DISCORD_WEBHOOK_PUBLIC = 'https://discord.com/api/webhooks/1491376739048358018/zmKHxEnJjQC2Qif-E6_IfjSxPkQkRCUk-L6j5KOcDTqdOWKwGAI-v3lxC-5OIOsjY2wL';
+const DISCORD_PUBLIC_DELAY = 2 * 60 * 1000; // 2 นาที
+
+function notifyDiscord(fb, charName, cartItems, entries) {
+  try {
+    const itemLines = entries.map(([id, { item, qty }]) => {
+      const bq = getBundleQty(item);
+      const price = getPrice(item) * bq;
+      const qtyLabel = bq > 1 ? `${qty} ชุด (${qty * bq} ชิ้น)` : `x${qty}`;
+      return `• ${item.name} ${qtyLabel} — ${formatPrice(price * qty)} ฿`;
+    }).join('\n');
+
+    const total = entries.reduce((sum, [, { item, qty }]) => {
+      const bq = getBundleQty(item);
+      return sum + getPrice(item) * bq * qty;
+    }, 0);
+
+    const payLabel = customerPayMode === 'pay' ? '💳 โอนแล้ว' : '📋 สั่งก่อน (ยังไม่โอน)';
+
+    const embed = {
+      title: '🛒 Order ใหม่!',
+      color: 0xff69b4,
+      fields: [
+        { name: 'Facebook', value: fb, inline: true },
+        { name: 'ตัวละคร', value: charName, inline: true },
+        { name: 'ชำระเงิน', value: payLabel, inline: true },
+        { name: 'รายการสินค้า', value: itemLines },
+        { name: 'รวม', value: `**${formatPrice(total)} บาท**`, inline: true }
+      ],
+      timestamp: new Date().toISOString()
+    };
+
+    const payload = JSON.stringify({ embeds: [embed] });
+    const sendWebhook = (url) => {
+      try {
+        const blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon(url, blob);
+      } catch (_) {
+        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }).catch(() => {});
+      }
+    };
+
+    // Owner: ส่งทันที
+    sendWebhook(DISCORD_WEBHOOK_OWNER);
+
+    // Public (แอดมินนอก): delay 2 นาที
+    setTimeout(() => sendWebhook(DISCORD_WEBHOOK_PUBLIC), DISCORD_PUBLIC_DELAY);
+  } catch (e) {
+    // ไม่ให้ Discord error กระทบ flow หลัก
   }
 }
 

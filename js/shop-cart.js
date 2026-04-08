@@ -26,7 +26,7 @@ function openItemModal(itemId) {
       : `${priceUnit} ${formatPrice(getPrice(currentItem) * bq)} บาท`;
   const stockLabel = bq > 1 ? `เหลือ ${canAddBundles} ชุด` : `เหลือ ${canAddBundles} ชิ้น`;
   document.getElementById("modalStockInfo").textContent =
-    stockLabel + (reserved > 0 ? ` (${reserved} ถูกจองโดยคนอื่น)` : '');
+    stockLabel + (reserved > 0 ? ` (${reserved} คนกำลังสนใจ)` : '');
   // แสดง input ว่างให้กรอกเอง
   const qtyInput = document.getElementById("qtyDisplay");
   qtyInput.value = '';
