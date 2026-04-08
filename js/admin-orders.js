@@ -66,7 +66,7 @@ function renderAdminReservations() {
   container.style.display = 'block';
   container.innerHTML = `
     <div class="admin-reserve-panel">
-      <div class="reserve-header">🛒 สินค้าถูกจอง (${active.length} คน)</div>
+      <div class="reserve-header">🛒 ลูกค้ากำลังสนใจ (${active.length} คน)</div>
       ${rows}
     </div>
   `;
@@ -648,6 +648,16 @@ async function recalculateRevenue() {
 
   } catch (e) {
     showAlert('โหลด orders ไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+// ============ MARK ORDER AS PAID ============
+async function markOrderPaid(orderId) {
+  try {
+    await db.collection('orders').doc(orderId).update({ paymentMode: 'paid' });
+    showToast('อัปเดตเป็น "โอนแล้ว"');
+  } catch (e) {
+    showAlert('อัปเดตไม่ได้: ' + e.message, 'ผิดพลาด');
   }
 }
 

@@ -616,6 +616,9 @@ body {
   font-weight: 600;
   white-space: nowrap;
 }
+.item-card .reserved-badge.interested-badge {
+  background: rgba(100, 181, 246, 0.8);
+}
 
 /* ============ PENDING ITEMS PANEL ============ */
 .pending-items-header {

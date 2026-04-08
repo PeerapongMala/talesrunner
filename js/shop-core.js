@@ -227,7 +227,7 @@ function renderItems() {
       <div class="item-card ${outOfStock ? "out-of-stock" : ""}"
            data-id="${item.id}">
         <div class="stock-badge">${bq > 1 ? `${bundleCount} ชุด` : `x${available}`}</div>
-        ${reserved > 0 ? `<div class="reserved-badge" data-reserve-item="${item.id}">${reserved} จอง</div>` : ""}
+        ${reserved > 0 ? `<div class="reserved-badge interested-badge" data-reserve-item="${item.id}">${reserved} คนสนใจ</div>` : ""}
         <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text fill=%22%23999%22 x=%2250%22 y=%2255%22 text-anchor=%22middle%22 font-size=%2212%22>No Image</text></svg>'">
         <div class="item-name">${escapeHtml(item.name)}${bq > 1 ? ` <span style="color:#ff9800;font-size:12px;">(ชุดละ ${bq} ชิ้น)</span>` : ''}</div>
         <div class="item-price">
@@ -937,12 +937,12 @@ function updateReservationCountdowns() {
       if (remain > 0) {
         const m = Math.floor(remain / 60000);
         const s = Math.floor((remain % 60000) / 1000).toString().padStart(2, '0');
-        el.textContent = `${reserved} จอง (${m}:${s})`;
+        el.textContent = `${reserved} คนสนใจ`;
       } else {
-        el.textContent = `${reserved} จอง`;
+        el.textContent = `${reserved} คนสนใจ`;
       }
     } else {
-      el.textContent = `${reserved} จอง`;
+      el.textContent = `${reserved} คนสนใจ`;
     }
   });
 }

@@ -108,7 +108,7 @@ function processProductSnapshot(snapshot) {
           </td>
           <td style="text-align:center;">${formatPrice(item.price)} บาท</td>
           <td style="text-align:center;">
-            ${isOwner ? `<input type="number" step="any" min="0" class="promo-input" data-action="promo" data-id="${item.id}" data-external-cut="${item.externalCut || 0}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-">` : (!isExternal ? `<input type="number" step="any" min="0" class="promo-input" data-action="promo-request" data-id="${item.id}" data-name="${escapeHtml(item.name)}" data-current="${item.promoPrice != null ? item.promoPrice : ''}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-" style="border-color:rgba(255,152,0,0.4);">` : `<span style="color:#ff9800;">${item.promoPrice != null ? formatPrice(item.promoPrice) : '-'}</span>`)}
+            ${isOwner ? `<input type="number" step="any" min="0" class="promo-input" data-action="promo" data-id="${item.id}" data-external-cut="${item.externalCut || 0}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-">` : `<input type="number" step="any" min="0" class="promo-input" data-action="promo-request" data-id="${item.id}" data-name="${escapeHtml(item.name)}" data-current="${item.promoPrice != null ? item.promoPrice : ''}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-" style="border-color:rgba(255,152,0,0.4);">`}
             ${isOwner && item.externalCut ? (() => { const ec = item.externalCut; const sellPrice = item.promoPrice != null ? item.promoPrice : item.price; const ownerNet = sellPrice - ec; return `<div style="font-size:10px;color:#aaa;margin-top:2px;">แอดนอก ${formatPrice(ec)} ฿ · Owner ${formatPrice(ownerNet)} ฿${ownerNet < 0 ? ' <span style="color:#ff4444;">ขาดทุน!</span>' : ''}</div>`; })() : ''}
             ${isExternal && typeof calcExternalCut === 'function' ? (() => { const sellPrice = item.promoPrice != null ? item.promoPrice : item.price; const ec = item.externalCut || calcExternalCut(sellPrice); return `<div style="font-size:10px;color:#4CAF50;margin-top:2px;">คุณได้ ${formatPrice(ec)} ฿</div>`; })() : ''}
           </td>
@@ -690,19 +690,24 @@ async function toggleAdminStock(adminName, enabling) {
     const entries = Object.entries(saved);
     for (let i = 0; i < entries.length; i += 249) {
       const batch = db.batch();
-      entries.slice(i, i + 249).forEach(([itemId, qty]) => {
+      entries.slice(i, i + 249).forEach(([itemId, val]) => {
+        // รองรับทั้ง format เก่า (number) และ format ใหม่ ({ stock, admin })
+        const stockQty = typeof val === 'object' ? (val.stock || 0) : (Number(val) || 0);
+        const adminQty = typeof val === 'object' ? (val.admin || stockQty) : stockQty;
         const itemRef = db.collection('items').doc(itemId);
         batch.set(itemRef, {
-          stock: firebase.firestore.FieldValue.increment(qty),
-          adminStock: { [adminName]: firebase.firestore.FieldValue.increment(qty) },
+          stock: firebase.firestore.FieldValue.increment(stockQty),
+          adminStock: { [adminName]: firebase.firestore.FieldValue.increment(adminQty) },
           _adminAdjust: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-        batch.set(itemRef.collection('stockHistory').doc(), {
-          qty: qty,
-          addedBy: adminName,
-          note: 'เปิด stock กลับ',
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        if (stockQty > 0) {
+          batch.set(itemRef.collection('stockHistory').doc(), {
+            qty: stockQty,
+            addedBy: adminName,
+            note: 'เปิด stock กลับ',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
       });
       if (i === 0) {
         batch.set(db.collection('settings').doc('adminStock'), {
@@ -761,10 +766,12 @@ async function toggleAdminStock(adminName, enabling) {
       return;
     }
 
-    // แปลงเป็น { itemId: deductQty } สำหรับ save + restore
+    // แปลงเป็น { itemId: { stock: deductQty, admin: adminQty } } สำหรับ save + restore
     const saveForRestore = {};
     const entries = Object.entries(savedAmounts);
-    entries.forEach(([itemId, { deductQty }]) => { saveForRestore[itemId] = deductQty; });
+    entries.forEach(([itemId, { deductQty, adminQty }]) => {
+      saveForRestore[itemId] = { stock: deductQty, admin: adminQty };
+    });
 
     for (let i = 0; i < entries.length; i += 249) {
       const batch = db.batch();
@@ -1012,17 +1019,11 @@ function openEditProductModal(itemId, name, price, currentImage) {
   const bqInput = document.getElementById('editBundleQty');
   if (bqInput) bqInput.value = (item && item.bundleQty > 1) ? item.bundleQty : '';
 
-  // ล็อคราคาสำหรับ non-owner
+  // ราคา: owner แก้ตรง, admin/external ส่งคำขอ
   const priceInput = document.getElementById('editPrice');
-  if (!isOwner) {
-    priceInput.disabled = true;
-    priceInput.style.opacity = '0.5';
-    priceInput.title = 'เฉพาะ owner แก้ราคาได้';
-  } else {
-    priceInput.disabled = false;
-    priceInput.style.opacity = '';
-    priceInput.title = '';
-  }
+  priceInput.disabled = false;
+  priceInput.style.opacity = '';
+  priceInput.title = isOwner ? '' : 'แก้ราคาได้ — ต้องรอ owner อนุมัติ';
 
   const preview = document.getElementById('editImagePreview');
   if (currentImage) {
@@ -1050,7 +1051,7 @@ async function confirmEditProduct() {
 
   let hasError = false;
   if (!name) { showFieldError('editNameError', 'กรุณากรอกชื่อสินค้า'); hasError = true; }
-  if (isOwner && (isNaN(price) || price <= 0)) { showFieldError('editPriceError', 'กรุณากรอกราคา'); hasError = true; }
+  if (isNaN(price) || price <= 0) { showFieldError('editPriceError', 'กรุณากรอกราคา'); hasError = true; }
   if (!editImageBase64 && !editOriginalImage) { showFieldError('editImageError', 'กรุณาเลือกรูปสินค้า'); hasError = true; }
   if (hasError) return;
 
@@ -1060,9 +1061,13 @@ async function confirmEditProduct() {
 
   try {
     const bundleQty = parseInt(document.getElementById('editBundleQty').value) || 0;
+    const item = allProducts.find(p => p.id === editingProductId);
+    const oldPrice = item ? Number(item.price) || 0 : 0;
     const updateData = { name };
-    // เฉพาะ owner แก้ราคาได้
-    if (isOwner) updateData.price = price;
+
+    if (isOwner) {
+      updateData.price = price;
+    }
     if (bundleQty > 1) {
       updateData.bundleQty = bundleQty;
     } else {
@@ -1075,6 +1080,18 @@ async function confirmEditProduct() {
     }
 
     await db.collection('items').doc(editingProductId).update(updateData);
+
+    // non-owner เปลี่ยนราคา → ส่ง pending_actions
+    if (!isOwner && price !== oldPrice && !isNaN(price) && price > 0) {
+      const docId = 'price_' + editingProductId;
+      await db.collection('pending_actions').doc(docId).set({
+        type: 'price_change', itemId: editingProductId, itemName: name,
+        oldPrice, newPrice: price,
+        requestedBy: currentAdminName,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast('ส่งคำขอเปลี่ยนราคา ' + name + ' แล้ว รอ owner อนุมัติ');
+    }
 
     closeEditProductModal();
   } catch (e) {
@@ -1738,6 +1755,7 @@ function renderPendingActions(docs) {
     toggle_share: '🔗 แชร์/ยกเลิกแชร์',
     toggle_active: '👁 เปิด/ปิดสินค้า',
     promo_change: '💰 เปลี่ยนราคาโปร',
+    price_change: '💲 เปลี่ยนราคา',
     category_add: '📁 เพิ่มหมวดหมู่'
   };
 
@@ -1754,6 +1772,8 @@ function renderPendingActions(docs) {
         detail = `${escapeHtml(d.itemName)} → ${d.newValue ? 'เปิด' : 'ปิด'}`;
       } else if (d.type === 'promo_change') {
         detail = `${escapeHtml(d.itemName)} → ${d.newPromo !== null ? formatPrice(d.newPromo) + ' ฿' : 'ลบราคาโปร'}`;
+      } else if (d.type === 'price_change') {
+        detail = `${escapeHtml(d.itemName)} ${formatPrice(d.oldPrice)} → ${formatPrice(d.newPrice)} ฿`;
       } else if (d.type === 'category_add') {
         detail = `เพิ่ม "${escapeHtml(d.categoryName)}"`;
       }
@@ -1811,6 +1831,9 @@ async function approvePendingAction(actionId) {
       }
       await db.collection('items').doc(d.itemId).update(updateData);
       showToast('ตั้งราคาโปร ' + d.itemName + ' แล้ว');
+    } else if (d.type === 'price_change') {
+      await db.collection('items').doc(d.itemId).update({ price: d.newPrice });
+      showToast('เปลี่ยนราคา ' + d.itemName + ' เป็น ' + formatPrice(d.newPrice) + ' ฿ แล้ว');
     } else if (d.type === 'category_add') {
       const catDoc = await db.collection('settings').doc('categories').get();
       const list = (catDoc.exists && Array.isArray(catDoc.data().list)) ? catDoc.data().list : [];

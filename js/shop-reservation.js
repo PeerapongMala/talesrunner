@@ -173,8 +173,8 @@ function getMyReservationRemaining() {
 }
 
 function getAvailableStock(item) {
-  const reserved = getReservedQty(item.id);
-  return Math.max(0, (Number(item.stock) || 0) - reserved);
+  // ไม่หัก reserved — ใครกดสั่งก่อนได้ก่อน (เช็ค stock จริงตอน transaction)
+  return Math.max(0, Number(item.stock) || 0);
 }
 
 // ============ DELETE RESERVATION ============

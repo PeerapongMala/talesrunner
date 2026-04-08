@@ -641,6 +641,8 @@ document.addEventListener('DOMContentLoaded', () => {
       blockFacebook(btn.dataset.fb);
     } else if (action === 'deleteOrder') {
       deleteOrder(btn.dataset.id);
+    } else if (action === 'markPaid') {
+      markOrderPaid(btn.dataset.id);
     }
   });
 
