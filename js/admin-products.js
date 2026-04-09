@@ -2,6 +2,7 @@
 let productPage = 1;
 const PRODUCTS_PER_PAGE = 20;
 let _lastProductSnapshot = null;
+let showArchive = false; // toggle คลังเก็บ
 
 // ============ HELPER: เช็คว่าสินค้าเป็นของ admin คนนี้ ============
 function isMyProduct(item) {
@@ -80,13 +81,17 @@ function processProductSnapshot(snapshot) {
       }
     }
 
+    // แยกไอเทมที่เปิดอยู่ vs คลังเก็บ (ปิดอยู่)
+    const activeProducts = allProducts.filter(item => item.active !== false);
+    const archivedProducts = allProducts.filter(item => item.active === false);
+
     // External admin → แบ่ง 2 กลุ่ม: แชร์กับคุณ / ไม่แชร์
     let sharedProducts, notSharedProducts = [];
     if (isExternal) {
-      sharedProducts = allProducts.filter(item => isMyProduct(item));
-      notSharedProducts = allProducts.filter(item => !isMyProduct(item));
+      sharedProducts = activeProducts.filter(item => isMyProduct(item));
+      notSharedProducts = activeProducts.filter(item => !isMyProduct(item));
     } else {
-      sharedProducts = allProducts;
+      sharedProducts = activeProducts;
     }
 
     // Pagination (เฉพาะ sharedProducts)
@@ -139,6 +144,19 @@ function processProductSnapshot(snapshot) {
     if (isExternal && notSharedProducts.length > 0) {
       html += `<tr><td colspan="10" style="background:rgba(150,150,150,0.15);color:#888;font-weight:700;padding:10px 12px;font-size:13px;border-top:3px solid #555;border-bottom:2px solid #555;">ไม่ได้แชร์ (${notSharedProducts.length} รายการ)</td></tr>`;
       html += notSharedProducts.map((item, i) => renderRow(item, sharedProducts.length + i, true)).join('');
+    }
+
+    // คลังเก็บไอเทม
+    if (archivedProducts.length > 0) {
+      html += `<tr><td colspan="10" style="background:rgba(255,152,0,0.1);padding:8px 12px;border-top:3px solid #555;">
+        <button onclick="toggleArchive()" style="background:none;border:none;color:#ff9800;font-weight:700;font-size:13px;cursor:pointer;padding:0;">
+          ${showArchive ? '▼' : '▶'} คลังเก็บไอเทม (${archivedProducts.length})
+        </button>
+        <span style="color:#888;font-size:11px;margin-left:8px;">ไอเทมที่ปิดอยู่ — กดเปิดเพื่อนำกลับ</span>
+      </td></tr>`;
+      if (showArchive) {
+        html += archivedProducts.map((item, i) => renderRow(item, i, false)).join('');
+      }
     }
 
     tbody.innerHTML = html;
@@ -1446,6 +1464,11 @@ function applySortToProducts() {
     vb = Number(b[field]) || 0;
     return (va - vb) * dir;
   });
+}
+
+function toggleArchive() {
+  showArchive = !showArchive;
+  if (_lastProductSnapshot) processProductSnapshot(_lastProductSnapshot);
 }
 
 function updateSortIcons() {
