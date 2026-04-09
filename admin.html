@@ -579,17 +579,44 @@
 
     <!-- SHOP STATE MODAL -->
     <div class="modal-overlay" id="shopStateModal">
-      <div class="modal" style="max-width: 480px; text-align: center;">
+      <div class="modal" style="max-width: 520px; text-align: center;">
         <h2>ตั้งค่าสถานะร้าน</h2>
         <p style="color: #aaa; font-size: 14px; margin-bottom: 20px;">เลือกระบบการเปิดปิดร้านที่ต้องการ</p>
-        
+
         <div class="shop-state-buttons">
           <button class="btn-shop-mode auto" id="btnModeAuto">🕒 โหมด Auto<br><span>(ระบบเปิดปิดตามตารางเวลาอัตโนมัติ)</span></button>
           <button class="btn-shop-mode force-open" id="btnModeForceOpen">🟢 บังคับเปิดร้าน<br><span>(เปิดรับออเดอร์ตลอด 24 ชม. ไม่ปิด)</span></button>
           <button class="btn-shop-mode force-close" id="btnModeForceClose">🔴 บังคับปิดร้าน<br><span>(ปิดร้านทันที พร้อมเขียนแจ้งเหตุผลลูกค้า)</span></button>
         </div>
 
-        <button class="btn-secondary" id="shopStateCancelBtn" style="width: 100%;">ยกเลิก</button>
+        <!-- ตั้งเวลาเปิด/ปิดร้าน (Auto mode) -->
+        <div id="shopHoursSettings" style="margin-top: 20px; text-align: left; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px;">
+          <h3 style="font-size: 14px; color: #ffb6c1; margin: 0 0 12px 0; text-align: center;">ตั้งเวลาเปิด/ปิด (โหมด Auto)</h3>
+          <div style="display: grid; grid-template-columns: auto 1fr 1fr; gap: 8px 12px; align-items: center; font-size: 13px;">
+            <span style="color: #aaa;">วันธรรมดา (จ-ศ)</span>
+            <div class="form-group" style="margin:0;">
+              <label for="weekdayOpen" style="font-size:11px; color:#aaa;">เปิด</label>
+              <input type="text" id="weekdayOpen" value="20:00" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" style="width:100%; text-align:center; font-family:monospace;">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label for="weekdayClose" style="font-size:11px; color:#aaa;">ปิด</label>
+              <input type="text" id="weekdayClose" value="01:00" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" style="width:100%; text-align:center; font-family:monospace;">
+            </div>
+            <span style="color: #aaa;">เสาร์-อาทิตย์</span>
+            <div class="form-group" style="margin:0;">
+              <label for="weekendOpen" style="font-size:11px; color:#aaa;">เปิด</label>
+              <input type="text" id="weekendOpen" value="10:00" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" style="width:100%; text-align:center; font-family:monospace;">
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label for="weekendClose" style="font-size:11px; color:#aaa;">ปิด</label>
+              <input type="text" id="weekendClose" value="23:59" placeholder="HH:MM" pattern="[0-2][0-9]:[0-5][0-9]" maxlength="5" style="width:100%; text-align:center; font-family:monospace;">
+            </div>
+          </div>
+          <p style="font-size:11px; color:#888; margin:8px 0 0 0; text-align:center;">* ปิดข้ามวันได้ เช่น เปิด 20:00 ปิด 01:00 = ปิดตี 1 วันถัดไป</p>
+          <button class="btn-primary" id="saveShopHoursBtn" style="width:100%; margin-top:12px; font-size:13px;">บันทึกเวลา</button>
+        </div>
+
+        <button class="btn-secondary" id="shopStateCancelBtn" style="width: 100%; margin-top: 12px;">ยกเลิก</button>
       </div>
     </div>
 

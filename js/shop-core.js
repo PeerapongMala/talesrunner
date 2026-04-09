@@ -9,13 +9,49 @@ function formatPrice(v) {
 }
 function isPromoValid(item) {
   if (item.promoPrice == null) return false;
-  if (item.promoExpiresAt) {
-    return Date.now() < item.promoExpiresAt.toMillis();
+  if (item.promoExpiresAt && Date.now() < item.promoExpiresAt.toMillis()) {
+    return true; // ยังไม่หมด expiry ที่ตั้งไว้
   }
-  return true;
+  // ไม่มี expiry หรือ expiry หมดแล้ว → โปรอิงเวลาร้านเปิด
+  if (currentShopState === 'force_open') return true;
+  return isWithinShopHours();
 }
 function getPrice(item) {
   return isPromoValid(item) ? Number(item.promoPrice) : Number(item.price);
+}
+
+// คำนวณ timestamp ที่ร้านจะปิด (สำหรับ countdown โปร)
+function getNextCloseTimestamp() {
+  const now = new Date();
+  const day = now.getDay();
+  const isWeekend = day === 0 || day === 6;
+  const config = _shopHoursConfig || { weekday: { open: '20:00', close: '01:00' }, weekend: { open: '10:00', close: '23:59' } };
+  const sched = isWeekend ? config.weekend : config.weekday;
+  const closeParts = (sched.close || '01:00').split(':');
+  const openParts = (sched.open || '20:00').split(':');
+  const closeMin = parseInt(closeParts[0]) * 60 + parseInt(closeParts[1] || 0);
+  const openMin = parseInt(openParts[0]) * 60 + parseInt(openParts[1] || 0);
+
+  const closeDate = new Date(now);
+  closeDate.setSeconds(0, 0);
+  closeDate.setHours(parseInt(closeParts[0]), parseInt(closeParts[1] || 0));
+
+  if (closeMin > openMin) {
+    // ปิดวันเดียวกัน (เช่น 10:00 - 23:59)
+    if (closeDate.getTime() <= now.getTime()) {
+      // ปิดไปแล้ว → วันพรุ่งนี้
+      closeDate.setDate(closeDate.getDate() + 1);
+    }
+  } else {
+    // ข้ามวัน (เช่น 20:00 - 01:00)
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    if (nowMin >= openMin) {
+      // อยู่ช่วงหลังเปิด → ปิดวันพรุ่งนี้
+      closeDate.setDate(closeDate.getDate() + 1);
+    }
+    // ถ้า nowMin < closeMin → ปิดวันนี้ (ไม่ต้องเปลี่ยน)
+  }
+  return closeDate.getTime();
 }
 
 // Promo Countdown — global function เรียกได้จากทุกที่
@@ -233,7 +269,11 @@ function renderItems() {
         <div class="item-price">
           ${
             isPromoValid(item)
-              ? `${item.promoExpiresAt ? `<div class="promo-countdown" data-expires="${item.promoExpiresAt.toMillis()}"></div>` : '<div class="promo-badge-permanent">โปรโมชั่น</div>'}
+              ? `${item.promoExpiresAt
+                  ? `<div class="promo-countdown" data-expires="${item.promoExpiresAt.toMillis()}"></div>`
+                  : (currentShopState === 'force_open'
+                    ? '<div class="promo-badge-permanent">โปรโมชั่น</div>'
+                    : `<div class="promo-countdown" data-expires="${getNextCloseTimestamp()}"></div>`)}
                <span class="original-price">${priceUnit} ${formatPrice(item.price * bq)} บาท</span> <span class="promo-price">${priceUnit} ${formatPrice(item.promoPrice * bq)} บาท</span>`
               : `${priceUnit} ${formatPrice(unitPrice)} บาท`
           }
@@ -357,31 +397,45 @@ function setupEscapeKey() {
 }
 
 // ============ SHOP HOURS ============
+function updateShopHoursDisplay() {
+  const wd = _shopHoursConfig.weekday || { open: '20:00', close: '01:00' };
+  const we = _shopHoursConfig.weekend || { open: '10:00', close: '23:59' };
+  const wdText = `จ-ศ ${wd.open} - ${wd.close}`;
+  const weText = `ส-อา ${we.open} - ${we.close} (อาจปิดถ้าติดธุระ)`;
+  ['shopHoursWeekday', 'shopHoursWeekdayClosed'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = wdText;
+  });
+  ['shopHoursWeekend', 'shopHoursWeekendClosed'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = weText;
+  });
+}
+
 function updateShopHours() {
   const el = document.getElementById("shopHoursStatus");
   if (!el) return;
   const now = new Date();
   const day = now.getDay();
   const isWeekend = day === 0 || day === 6;
+  const sched = isWeekend ? _shopHoursConfig.weekend : _shopHoursConfig.weekday;
+  const openTime = sched.open || (isWeekend ? '10:00' : '20:00');
 
-  // ใช้ shopOpen (รวม force_open/force_close/auto แล้ว) แทน isWithinShopHours ตรงๆ
   if (shopOpen) {
-    if (currentShopState === "force_open") {
-      el.textContent = "ร้านเปิดอยู่";
-    } else {
-      el.textContent = "ร้านเปิดอยู่";
-    }
+    el.textContent = "ร้านเปิดอยู่";
     el.className = "shop-hours-status open";
   } else {
     if (currentShopState === "force_close") {
       el.textContent = "ร้านปิดอยู่ (แอดมินปิดร้าน)";
     } else {
-      el.textContent = isWeekend
-        ? "ร้านปิดอยู่ — เปิด 10:00 น."
-        : "ร้านปิดอยู่ — เปิด 20:00 น.";
+      const openH = openTime.split(':')[0];
+      const openM = openTime.split(':')[1] || '00';
+      const timeStr = `${parseInt(openH)}:${openM}`;
+      el.textContent = `ร้านปิดอยู่ — เปิด ${timeStr} น.`;
     }
     el.className = "shop-hours-status closed";
   }
+  updateShopHoursDisplay();
 }
 
 // ============ EVENT LISTENERS ============
@@ -396,6 +450,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadStats();
   loadBlocklist();
   loadReservations();
+  if (typeof loadDiscordWebhooks === 'function') loadDiscordWebhooks();
 
   // จัดการการพับจอ (Page Visibility) เพื่อประหยัดโควต้า
   document.addEventListener("visibilitychange", () => {
@@ -723,23 +778,45 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // ============ SHOP OPEN/CLOSE ============
+// ค่าเริ่มต้น — จะถูก override จาก Firestore
+let _shopHoursConfig = { weekday: { open: '20:00', close: '01:00' }, weekend: { open: '10:00', close: '23:59' } };
+
 function isWithinShopHours() {
+  return checkShopHoursCustomer(_shopHoursConfig);
+}
+
+// ฟังก์ชันเช็คเวลาเปิด/ปิด (รองรับข้ามวัน)
+function checkShopHoursCustomer(config) {
   const now = new Date();
   const day = now.getDay();
-  const hour = now.getHours();
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const nowMin = h * 60 + m;
 
-  // เช็คกะดึก (เที่ยงคืนถึงตีหนึ่ง ของวัน อ.-ส. ที่เป็นช่วงต่อของคืนวันจันทร์-ศุกร์ปิด 01:00)
-  if (hour === 0 && day >= 2 && day <= 6) {
-    return true;
+  const isWeekend = day === 0 || day === 6;
+  const sched = isWeekend ? config.weekend : config.weekday;
+  const openParts = (sched.open || '20:00').split(':');
+  const closeParts = (sched.close || '01:00').split(':');
+  const openMin = parseInt(openParts[0]) * 60 + parseInt(openParts[1] || 0);
+  const closeMin = parseInt(closeParts[0]) * 60 + parseInt(closeParts[1] || 0);
+
+  if (closeMin > openMin) {
+    return nowMin >= openMin && nowMin < closeMin;
+  } else {
+    // ข้ามวัน
+    if (nowMin >= openMin) return true;
+    if (nowMin < closeMin) {
+      const yesterday = (day + 6) % 7;
+      const yIsWeekend = yesterday === 0 || yesterday === 6;
+      const ySched = yIsWeekend ? config.weekend : config.weekday;
+      const yOpenParts = (ySched.open || '20:00').split(':');
+      const yCloseParts = (ySched.close || '01:00').split(':');
+      const yOpenMin = parseInt(yOpenParts[0]) * 60 + parseInt(yOpenParts[1] || 0);
+      const yCloseMin = parseInt(yCloseParts[0]) * 60 + parseInt(yCloseParts[1] || 0);
+      if (yCloseMin <= yOpenMin && nowMin < yCloseMin) return true;
+    }
+    return false;
   }
-
-  if (day === 0 || day === 6) {
-    // เสาร์-อาทิตย์ ปิด 23:59:59 (เปิด 10:00)
-    return hour >= 10;
-  }
-
-  // จันทร์-ศุกร์ เปิด 20:00
-  return hour >= 20;
 }
 
 let currentShopState = "auto"; // 'auto' | 'force_open' | 'force_close'
@@ -895,6 +972,7 @@ function processShopSettings(doc) {
     _quotaResetAt = data.quotaResetAt || 0;
     _quotaResetHour = data.quotaResetHour || 0;
     if (data.promptpay) currentPromptPay = data.promptpay;
+    if (data.shopHours) _shopHoursConfig = data.shopHours;
     adminPayMode = data.payMode || 'both';
   } else {
     currentShopState = "auto";
@@ -904,6 +982,8 @@ function processShopSettings(doc) {
   applyShopStatus();
   applyAdminPayMode();
   applyPaymentStatus();
+  // re-render เพื่ออัปเดต promo countdown/badge ตาม shop state
+  if (items.length > 0) renderItems();
 }
 
 let _shopStatusInterval = null;

@@ -449,11 +449,23 @@ async function submitOrder() {
 }
 
 // ============ DISCORD NOTIFICATION ============
-const DISCORD_WEBHOOK_OWNER = 'https://discord.com/api/webhooks/1491376386022310068/fpSb3PFwk9333x9MFrEIpnuAzbspLY3u278y90WwK6BRtvuZAWbx6y8u7A5yOpZTO-dO';
-const DISCORD_WEBHOOK_PUBLIC = 'https://discord.com/api/webhooks/1491376739048358018/zmKHxEnJjQC2Qif-E6_IfjSxPkQkRCUk-L6j5KOcDTqdOWKwGAI-v3lxC-5OIOsjY2wL';
+// Webhook URLs โหลดจาก Firestore settings/discord (ไม่ hardcode ใน source)
+let _discordWebhookOwner = null;
+let _discordWebhookPublic = null;
 const DISCORD_PUBLIC_DELAY = 2 * 60 * 1000; // 2 นาที
 
+function loadDiscordWebhooks() {
+  db.collection('settings').doc('discord').get().then(doc => {
+    if (doc.exists) {
+      const data = doc.data();
+      _discordWebhookOwner = data.webhookOwner || null;
+      _discordWebhookPublic = data.webhookPublic || null;
+    }
+  }).catch(() => {});
+}
+
 function notifyDiscord(fb, charName, cartItems, entries) {
+  if (!_discordWebhookOwner && !_discordWebhookPublic) return;
   try {
     const itemLines = entries.map(([id, { item, qty }]) => {
       const bq = getBundleQty(item);
@@ -484,6 +496,7 @@ function notifyDiscord(fb, charName, cartItems, entries) {
 
     const payload = JSON.stringify({ embeds: [embed] });
     const sendWebhook = (url) => {
+      if (!url) return;
       try {
         const blob = new Blob([payload], { type: 'application/json' });
         navigator.sendBeacon(url, blob);
@@ -493,10 +506,12 @@ function notifyDiscord(fb, charName, cartItems, entries) {
     };
 
     // Owner: ส่งทันที
-    sendWebhook(DISCORD_WEBHOOK_OWNER);
+    sendWebhook(_discordWebhookOwner);
 
     // Public (แอดมินนอก): delay 2 นาที
-    setTimeout(() => sendWebhook(DISCORD_WEBHOOK_PUBLIC), DISCORD_PUBLIC_DELAY);
+    if (_discordWebhookPublic) {
+      setTimeout(() => sendWebhook(_discordWebhookPublic), DISCORD_PUBLIC_DELAY);
+    }
   } catch (e) {
     // ไม่ให้ Discord error กระทบ flow หลัก
   }

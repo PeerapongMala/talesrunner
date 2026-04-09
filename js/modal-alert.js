@@ -444,6 +444,14 @@ async function syncOfflineQueue() {
         const existingDeliveries = Array.isArray(orderData.deliveries) ? orderData.deliveries : [];
         const newDeliveries = [];
 
+        // อ่าน item docs ก่อนเพื่อเช็ค adminStock (ป้องกันติดลบ)
+        const itemDocsMap = {};
+        for (const di of entry.deliverItems) {
+          if (di.itemId && !itemDocsMap[di.itemId]) {
+            itemDocsMap[di.itemId] = await transaction.get(db.collection('items').doc(di.itemId));
+          }
+        }
+
         for (const di of entry.deliverItems) {
           const totalDelivered = existingDeliveries
             .filter(d => d.itemId === di.itemId)
@@ -451,6 +459,16 @@ async function syncOfflineQueue() {
           const orderItem = orderItems.find(i => i.itemId === di.itemId);
           const remain = orderItem ? orderItem.qty - totalDelivered : 0;
           if (di.qty > remain) throw new Error(`${di.name} ส่งเกินจำนวน`);
+
+          // เช็ค adminStock ไม่ให้ติดลบ
+          const itemDoc = itemDocsMap[di.itemId];
+          if (itemDoc && itemDoc.exists) {
+            const iData = itemDoc.data();
+            const myAdminStock = typeof getAdminStockValue === 'function'
+              ? getAdminStockValue(iData.adminStock || {}, entry.adminName)
+              : (Number((iData.adminStock || {})[entry.adminName]) || 0);
+            if (di.qty > myAdminStock) throw new Error(`${di.name} stock ของ ${entry.adminName} มีแค่ ${myAdminStock}`);
+          }
 
           newDeliveries.push({ itemId: di.itemId, qty: di.qty, by: entry.adminName, at: new Date() });
 
