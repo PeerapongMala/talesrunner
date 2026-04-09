@@ -662,6 +662,7 @@ function askCloseReason() {
 }
 
 // ============ SHOP OPEN/CLOSE TOGGLE ============
+let _shopToggleInitialized = false;
 function listenShopToggle() {
   const btn = document.getElementById('shopToggleBtn');
   const modal = document.getElementById('shopStateModal');
@@ -733,49 +734,54 @@ function listenShopToggle() {
   // Auto update text if schedule changes while viewing admin
   setInterval(() => updateBtn(currentMode), 60000);
 
-  // เปิด Modal
-  btn.addEventListener('click', () => {
-    modal.classList.add('active');
-  });
+  // Bind events ครั้งเดียว — ป้องกัน listener ซ้ำทำให้ toast เด้งหลายรอบ
+  if (!_shopToggleInitialized) {
+    _shopToggleInitialized = true;
 
-  // ปิด Modal
-  cancelBtn.addEventListener('click', () => {
-    modal.classList.remove('active');
-  });
+    // เปิด Modal
+    btn.addEventListener('click', () => {
+      modal.classList.add('active');
+    });
 
-  // Handle Mode Change
-  async function setShopMode(newMode) {
-    modal.classList.remove('active');
-    btn.disabled = true;
+    // ปิด Modal
+    cancelBtn.addEventListener('click', () => {
+      modal.classList.remove('active');
+    });
 
-    try {
-      if (newMode === 'force_close') {
-        const reason = await askCloseReason();
-        if (reason === null) return;
-        await db.collection('settings').doc('shop').set({
-          shopState: 'force_close',
-          isOpen: false,
-          closeReason: reason.trim() || ''
-        }, { merge: true });
-        showToast('ตั้งค่าเป็น: บังคับปิดร้าน');
-      } else {
-        await db.collection('settings').doc('shop').set({
-          shopState: newMode,
-          isOpen: true,
-          closeReason: firebase.firestore.FieldValue.delete()
-        }, { merge: true });
-        showToast(`ตั้งค่าเป็น: ${newMode === 'force_open' ? 'บังคับเปิด 24 ชม.' : 'เปิดตามเวลา (Auto)'}`);
+    // Handle Mode Change
+    async function setShopMode(newMode) {
+      modal.classList.remove('active');
+      btn.disabled = true;
+
+      try {
+        if (newMode === 'force_close') {
+          const reason = await askCloseReason();
+          if (reason === null) return;
+          await db.collection('settings').doc('shop').set({
+            shopState: 'force_close',
+            isOpen: false,
+            closeReason: reason.trim() || ''
+          }, { merge: true });
+          showToast('ตั้งค่าเป็น: บังคับปิดร้าน');
+        } else {
+          await db.collection('settings').doc('shop').set({
+            shopState: newMode,
+            isOpen: true,
+            closeReason: firebase.firestore.FieldValue.delete()
+          }, { merge: true });
+          showToast(`ตั้งค่าเป็น: ${newMode === 'force_open' ? 'บังคับเปิด 24 ชม.' : 'เปิดตามเวลา (Auto)'}`);
+        }
+      } catch (err) {
+        showAlert('เปลี่ยนสถานะร้านไม่ได้: ' + err.message, 'ผิดพลาด');
+      } finally {
+        btn.disabled = false;
       }
-    } catch (err) {
-      showAlert('เปลี่ยนสถานะร้านไม่ได้: ' + err.message, 'ผิดพลาด');
-    } finally {
-      btn.disabled = false;
     }
-  }
 
-  btnAuto.addEventListener('click', () => setShopMode('auto'));
-  btnForceOpen.addEventListener('click', () => setShopMode('force_open'));
-  btnForceClose.addEventListener('click', () => setShopMode('force_close'));
+    btnAuto.addEventListener('click', () => setShopMode('auto'));
+    btnForceOpen.addEventListener('click', () => setShopMode('force_open'));
+    btnForceClose.addEventListener('click', () => setShopMode('force_close'));
+  }
 }
 
 // ============ COUPONS & PAYMENTS ============
