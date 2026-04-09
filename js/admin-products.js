@@ -820,6 +820,170 @@ async function toggleAdminStock(adminName, enabling) {
 }
 
 
+// ============ STOCK SNAPSHOT (BACKUP / RESTORE) ============
+async function saveStockSnapshot() {
+  const yes = await showConfirm(
+    'บันทึก snapshot ของ stock + adminStock ทุกสินค้า?\n\nเก็บไว้ใน Firestore — โหลดกลับได้ทุกเมื่อ',
+    'บันทึก Stock'
+  );
+  if (!yes) return;
+
+  try {
+    showToast('กำลังบันทึก...');
+    const itemsSnap = await db.collection('items').get();
+    const data = {};
+    itemsSnap.forEach(doc => {
+      const d = doc.data();
+      data[doc.id] = {
+        name: d.name || '',
+        stock: Number(d.stock) || 0,
+        adminStock: d.adminStock || {}
+      };
+    });
+
+    const now = new Date();
+    const label = now.toLocaleString('th-TH', {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+
+    await db.collection('stock_snapshots').add({
+      label,
+      itemCount: Object.keys(data).length,
+      data,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentAdminName || 'owner'
+    });
+
+    showToast(`บันทึก snapshot แล้ว (${Object.keys(data).length} สินค้า)`);
+    // อัปเดตข้อมูลล่าสุด
+    const infoEl = document.getElementById('snapshotInfo');
+    if (infoEl) infoEl.textContent = `ล่าสุด: ${label}`;
+  } catch (e) {
+    showAlert('บันทึกไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+async function listStockSnapshots() {
+  try {
+    showToast('กำลังโหลด snapshots...');
+    const snap = await db.collection('stock_snapshots')
+      .orderBy('createdAt', 'desc')
+      .limit(10)
+      .get();
+
+    if (snap.empty) {
+      showAlert('ยังไม่เคยบันทึก snapshot\nกด "บันทึก Stock ปัจจุบัน" ก่อน', 'ไม่มี Snapshot');
+      return;
+    }
+
+    // สร้าง overlay เลือก snapshot
+    let overlay = document.getElementById('snapshotOverlay');
+    if (overlay) overlay.remove();
+    overlay = document.createElement('div');
+    overlay.id = 'snapshotOverlay';
+    overlay.className = 'modal-overlay active';
+    overlay.style.zIndex = '10001';
+
+    const rows = snap.docs.map(doc => {
+      const d = doc.data();
+      const date = d.createdAt ? d.createdAt.toDate().toLocaleString('th-TH') : d.label || '-';
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #333;gap:8px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:500;color:#e0b0ff;">${escapeHtml(d.label || date)}</div>
+            <div style="font-size:11px;color:#aaa;">${d.itemCount || '?'} สินค้า · โดย ${escapeHtml(d.createdBy || '-')}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            <button class="btn-table secondary" data-action="restoreSnap" data-id="${doc.id}" style="font-size:11px;padding:4px 10px;">โหลดกลับ</button>
+            <button class="btn-table" data-action="deleteSnap" data-id="${doc.id}" style="font-size:11px;padding:4px 8px;color:#ff4444;border-color:#ff4444;">ลบ</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:500px;max-height:80vh;display:flex;flex-direction:column;">
+        <h2>📋 Stock Snapshots</h2>
+        <div style="overflow-y:auto;flex:1;border:1px solid #333;border-radius:8px;">
+          ${rows}
+        </div>
+        <div class="modal-buttons" style="margin-top:10px;">
+          <button class="btn-secondary" id="snapClose">ปิด</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#snapClose').addEventListener('click', () => overlay.remove());
+
+    overlay.addEventListener('click', async (e) => {
+      const restoreBtn = e.target.closest('[data-action="restoreSnap"]');
+      if (restoreBtn) {
+        await restoreStockSnapshot(restoreBtn.dataset.id);
+        overlay.remove();
+        return;
+      }
+      const deleteBtn = e.target.closest('[data-action="deleteSnap"]');
+      if (deleteBtn) {
+        const ok = await showConfirm('ลบ snapshot นี้?', 'ยืนยัน');
+        if (!ok) return;
+        try {
+          await db.collection('stock_snapshots').doc(deleteBtn.dataset.id).delete();
+          deleteBtn.closest('div[style]').remove();
+          showToast('ลบ snapshot แล้ว');
+        } catch (err) {
+          showAlert('ลบไม่ได้: ' + err.message, 'ผิดพลาด');
+        }
+      }
+    });
+
+  } catch (e) {
+    showAlert('โหลดไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+async function restoreStockSnapshot(snapshotId) {
+  const yes = await showConfirm(
+    'โหลด stock กลับจาก snapshot นี้?\n\n' +
+    '• stock + adminStock ทุกสินค้าจะถูกเขียนทับ\n' +
+    '• สินค้าใหม่ที่เพิ่มหลังเซฟจะไม่ถูกแตะ\n\n' +
+    '⚠️ แนะนำ: เซฟ snapshot ปัจจุบันก่อนโหลดกลับ',
+    'โหลด Stock กลับ'
+  );
+  if (!yes) return;
+
+  const doubleCheck = await showConfirm('ยืนยันอีกครั้ง — stock จะถูกเขียนทับ!', 'ยืนยันครั้งสุดท้าย');
+  if (!doubleCheck) return;
+
+  try {
+    showToast('กำลังโหลดกลับ...');
+    const doc = await db.collection('stock_snapshots').doc(snapshotId).get();
+    if (!doc.exists) { showAlert('ไม่พบ snapshot', 'ผิดพลาด'); return; }
+
+    const snapData = doc.data().data || {};
+    const entries = Object.entries(snapData);
+
+    for (let i = 0; i < entries.length; i += 499) {
+      const batch = db.batch();
+      entries.slice(i, i + 499).forEach(([itemId, val]) => {
+        batch.set(db.collection('items').doc(itemId), {
+          stock: val.stock || 0,
+          adminStock: val.adminStock || {}
+        }, { merge: true });
+      });
+      await batch.commit();
+    }
+
+    showAlert(
+      `โหลดกลับเสร็จ!\n\nอัปเดต ${entries.length} สินค้า\nstock + adminStock ถูกเขียนทับแล้ว`,
+      'โหลด Stock สำเร็จ'
+    );
+  } catch (e) {
+    showAlert('โหลดกลับไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
 // ============ IMAGE UPLOAD HELPERS ============
 function fileToBase64(file, maxWidth) {
   if (file.size > MAX_IMAGE_SIZE) {
