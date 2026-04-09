@@ -117,6 +117,11 @@ service cloud.firestore {
       );
     }
 
+    // ============ STOCK SNAPSHOTS (backup/restore) ============
+    match /stock_snapshots/{snapId} {
+      allow read, write: if isAdmin();
+    }
+
     // ============ RESERVATIONS (จองสินค้าในตะกร้า) ============
     match /reservations/{sessionId} {
       allow read: if true;

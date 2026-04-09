@@ -139,6 +139,8 @@ function setupLogin() {
         } else {
           const ownerActions = document.getElementById('ownerStockActions');
           if (ownerActions) ownerActions.style.display = 'flex';
+          const ownerBackup = document.getElementById('ownerStockBackup');
+          if (ownerBackup) ownerBackup.style.display = 'flex';
           // Owner: quota badge เป็นลิงก์ไป Firebase Console
           const quotaEl = document.getElementById('quotaInfo');
           if (quotaEl) {

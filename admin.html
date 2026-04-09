@@ -113,6 +113,20 @@
           <div id="pendingDeletesPanel" style="display:none;"></div>
           <div id="pendingActionsPanel" style="display:none;"></div>
           <div id="adminStockToggles" class="admin-stock-toggles" style="display:none;"></div>
+          <div id="ownerStockBackup" style="display:none;flex-direction:column;gap:8px;margin-bottom:10px;background:rgba(76,175,80,0.05);border:1px solid rgba(76,175,80,0.3);border-radius:8px;padding:12px;">
+            <div style="color:#4CAF50;font-size:13px;font-weight:600;">Backup / Restore Stock</div>
+            <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;">
+              <div style="flex:1;min-width:200px;">
+                <button class="btn-secondary" style="width:100%;padding:8px 12px;font-size:12px;color:#4CAF50;border-color:#4CAF50;" onclick="saveStockSnapshot()">💾 บันทึก Stock ปัจจุบัน</button>
+                <div style="font-size:10px;color:#aaa;margin-top:4px;">เซฟ stock + adminStock ทุกสินค้าไว้ กดเมื่อไหร่ก็ได้</div>
+              </div>
+              <div style="flex:1;min-width:200px;">
+                <button class="btn-secondary" style="width:100%;padding:8px 12px;font-size:12px;color:#4fc3f7;border-color:#4fc3f7;" onclick="listStockSnapshots()">📋 ดู / โหลด Stock กลับ</button>
+                <div style="font-size:10px;color:#aaa;margin-top:4px;">เลือก snapshot ที่เคยเซฟ แล้วโหลดกลับได้</div>
+              </div>
+            </div>
+            <div id="snapshotInfo" style="font-size:11px;color:#aaa;margin-top:4px;"></div>
+          </div>
           <div id="ownerStockActions" style="display:none;flex-direction:column;gap:8px;margin-bottom:10px;background:rgba(255,0,0,0.05);border:1px solid rgba(255,68,68,0.3);border-radius:8px;padding:12px;">
             <div style="color:#ff9800;font-size:13px;font-weight:600;">โซนอันตราย (Owner เท่านั้น)</div>
             <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;">
