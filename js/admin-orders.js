@@ -12,6 +12,15 @@ function loadAdminReservations() {
     _adminReservations = snapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .filter(r => r.expiresAt && r.expiresAt.toMillis() > now);
+
+    // Cleanup: ลบ reservation ที่หมดอายุแล้ว (admin ช่วยทำความสะอาด)
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      if (data.expiresAt && data.expiresAt.toMillis() < now) {
+        db.collection('reservations').doc(doc.id).delete().catch(() => {});
+      }
+    });
+
     renderAdminReservations();
   }, e => {
     console.warn('admin reservation listener:', e.message);
@@ -437,28 +446,54 @@ async function cancelOrder(orderId) {
         }, { merge: true });
       }
 
-      // คืน stock ทุกไอเทม
-      for (const item of items) {
-        if (item.itemId) {
-          transaction.update(db.collection('items').doc(item.itemId), {
-            stock: firebase.firestore.FieldValue.increment(item.qty)
-          });
+      // คำนวณจำนวนที่ส่งแล้วต่อ item เพื่อคืน stock ให้ถูกต้อง
+      const deliveredPerItem = {};
+      for (const del of deliveries) {
+        if (del.itemId) {
+          deliveredPerItem[del.itemId] = (deliveredPerItem[del.itemId] || 0) + (del.qty || 0);
         }
       }
 
-      // ย้อน delivery ที่เคยส่งไป → คืน adminStock + stockHistory
-      for (const del of deliveries) {
-        if (del.itemId && del.by) {
-          transaction.set(db.collection('items').doc(del.itemId), {
-            adminStock: { [del.by]: firebase.firestore.FieldValue.increment(del.qty) }
-          }, { merge: true });
+      // คืน stock ทุกไอเทม: ส่วนที่ยังไม่ส่ง (item.qty - delivered) คืน stock เฉยๆ
+      // ส่วนที่ส่งแล้วจะคืนทั้ง stock + adminStock ด้านล่าง
+      for (const item of items) {
+        if (!item.itemId) continue;
+        const delivered = deliveredPerItem[item.itemId] || 0;
+        const undelivered = item.qty - delivered;
+        // คืน stock ส่วนที่ยังไม่ส่ง (checkout หักไปแล้วตอนสั่ง)
+        if (undelivered > 0) {
+          transaction.update(db.collection('items').doc(item.itemId), {
+            stock: firebase.firestore.FieldValue.increment(undelivered)
+          });
+          transaction.set(
+            db.collection('items').doc(item.itemId).collection('stockHistory').doc(),
+            {
+              qty: undelivered,
+              addedBy: 'system',
+              note: 'คืน stock ยังไม่ส่ง (ยกเลิก order)',
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            }
+          );
         }
+      }
+
+      // ย้อน delivery ที่เคยส่งไป → คืน stock + adminStock + stockHistory
+      for (const del of deliveries) {
+        if (!del.itemId || !del.by) continue;
+        // คืน stock ส่วนที่ส่งแล้ว
+        transaction.update(db.collection('items').doc(del.itemId), {
+          stock: firebase.firestore.FieldValue.increment(del.qty)
+        });
+        // คืน adminStock ด้วย (ป้องกัน stock กับ adminStock เบี้ยว)
+        transaction.set(db.collection('items').doc(del.itemId), {
+          adminStock: { [del.by]: firebase.firestore.FieldValue.increment(del.qty) }
+        }, { merge: true });
         transaction.set(
           db.collection('items').doc(del.itemId).collection('stockHistory').doc(),
           {
-            qty: del.qty, // +คืน
+            qty: del.qty,
             addedBy: del.by,
-            note: 'คืน stock (ยกเลิก order)',
+            note: 'คืน stock ส่งแล้ว (ยกเลิก order)',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }
         );

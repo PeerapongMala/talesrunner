@@ -23,28 +23,63 @@ function formatPrice(v) { const n = Number(v) || 0; return n % 1 === 0 ? n.toStr
 const MAX_IMAGE_SIZE = 500 * 1024; // 500KB (base64 ~680KB, safe for Firestore 1MB limit)
 
 // ============ REUSABLE SHOP SCHEDULE ============
-function getNextCloseTime() {
+// ฟังก์ชันกลาง: ตรวจสอบว่าอยู่ในเวลาเปิดร้านหรือไม่ (รองรับข้ามวัน)
+function checkShopHours(config) {
   const now = new Date();
   const day = now.getDay();
-  const hour = now.getHours();
-  let closeTime = new Date(now);
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const nowMin = h * 60 + m; // นาทีปัจจุบันของวัน
 
-  // เช็คช่วงคาบเกี่ยวของเที่ยงคืนถึงตีหนึ่ง (00:00 - 01:00) 
-  // วัน อังคาร(2) - เสาร์(6) เกิดจากการที่วันก่อนหน้า (จ-ศ) เปิด 20:00 - 01:00
-  if (hour === 0 && day >= 2 && day <= 6) {
-      closeTime.setHours(1, 0, 0, 0);
-      return closeTime;
-  }
+  const isWeekend = day === 0 || day === 6;
+  const sched = isWeekend ? config.weekend : config.weekday;
+  const openParts = (sched.open || '20:00').split(':');
+  const closeParts = (sched.close || '01:00').split(':');
+  const openMin = parseInt(openParts[0]) * 60 + parseInt(openParts[1] || 0);
+  const closeMin = parseInt(closeParts[0]) * 60 + parseInt(closeParts[1] || 0);
 
-  // นอกเหนือจากนั้น
-  if (day === 0 || day === 6) {
-    // เสาร์-อาทิตย์ ปิด 23:59:59
-    closeTime.setHours(23, 59, 59, 999);
+  if (closeMin > openMin) {
+    // ปิดวันเดียวกัน เช่น 10:00 - 23:59
+    return nowMin >= openMin && nowMin < closeMin;
   } else {
-    // จันทร์(1) ถึง ศุกร์(5) ปิด 01:00 วันรุ่งขึ้น
-    closeTime.setDate(closeTime.getDate() + 1);
-    closeTime.setHours(1, 0, 0, 0);
+    // ข้ามวัน เช่น 20:00 - 01:00
+    if (nowMin >= openMin) return true; // หลังเปิด (เช่น 20:00+)
+    if (nowMin < closeMin) {
+      // ก่อนปิด (เช่น 00:00-01:00) — เช็คว่าวันก่อนหน้ามี schedule เปิดข้ามวันด้วย
+      const yesterday = (day + 6) % 7;
+      const yIsWeekend = yesterday === 0 || yesterday === 6;
+      const ySched = yIsWeekend ? config.weekend : config.weekday;
+      const yOpenParts = (ySched.open || '20:00').split(':');
+      const yCloseParts = (ySched.close || '01:00').split(':');
+      const yOpenMin = parseInt(yOpenParts[0]) * 60 + parseInt(yOpenParts[1] || 0);
+      const yCloseMin = parseInt(yCloseParts[0]) * 60 + parseInt(yCloseParts[1] || 0);
+      // ข้ามวัน: closeMin <= openMin && nowMin < yCloseMin
+      if (yCloseMin <= yOpenMin && nowMin < yCloseMin) return true;
+    }
+    return false;
   }
+}
+
+function getNextCloseTime(config) {
+  if (!config) config = { weekday: { open: '20:00', close: '01:00' }, weekend: { open: '10:00', close: '23:59' } };
+  const now = new Date();
+  const day = now.getDay();
+  const isWeekend = day === 0 || day === 6;
+  const sched = isWeekend ? config.weekend : config.weekday;
+  const closeParts = (sched.close || '01:00').split(':');
+  const openParts = (sched.open || '20:00').split(':');
+  const closeH = parseInt(closeParts[0]);
+  const closeM = parseInt(closeParts[1] || 0);
+  const openH = parseInt(openParts[0]);
+  const closeMin = closeH * 60 + closeM;
+  const openMin = openH * 60 + parseInt(openParts[1] || 0);
+
+  let closeTime = new Date(now);
+  if (closeMin <= openMin) {
+    // ข้ามวัน: ปิดวันรุ่งขึ้น
+    closeTime.setDate(closeTime.getDate() + 1);
+  }
+  closeTime.setHours(closeH, closeM, 0, 0);
   return closeTime;
 }
 
@@ -505,7 +540,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.dataset.action === 'promo') {
       const id = e.target.dataset.id;
       const val = e.target.value.trim();
-      
+
       const updateData = {};
       if (val === '') {
         updateData.promoPrice = firebase.firestore.FieldValue.delete();
@@ -514,8 +549,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const promo = parseFloat(val);
         if (isNaN(promo) || promo < 0) return;
         updateData.promoPrice = promo;
-        // ไม่ต้องตั้ง expiry — โปรคงอยู่จนกว่า admin จะลบเอง
-        updateData.promoExpiresAt = firebase.firestore.FieldValue.delete();
+        // ไม่ลบ promoExpiresAt — ให้ expiry input จัดการแยก
       }
 
       // เตือนถ้าราคาโปร < externalCut (owner ขาดทุน)
@@ -531,6 +565,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(() => showToast(val === '' ? 'ลบราคาโปรแล้ว' : 'ตั้งราคาโปร ' + val + ' บาท'))
         .catch(err => showAlert('บันทึกไม่ได้: ' + err.message, 'ผิดพลาด'));
     }
+
 
     // Internal admin: promo request → pending_actions
     if (e.target.dataset.action === 'promo-request') {

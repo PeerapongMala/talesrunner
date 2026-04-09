@@ -103,30 +103,37 @@ function processProductSnapshot(snapshot) {
     function renderRow(item, index, disabled) {
       const isActive = item.active !== false;
       const rowStyle = disabled ? 'opacity:0.35;pointer-events:none;background:rgba(0,0,0,0.2);' : (!isActive ? 'opacity:0.4;' : '');
+      const promoInput = isOwner
+        ? `<input type="number" step="any" min="0" class="promo-input" data-action="promo" data-id="${item.id}" data-external-cut="${item.externalCut || 0}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-">`
+        : `<input type="number" step="any" min="0" class="promo-input" data-action="promo-request" data-id="${item.id}" data-name="${escapeHtml(item.name)}" data-current="${item.promoPrice != null ? item.promoPrice : ''}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-" style="border-color:rgba(255,152,0,0.4);">`;
+      let promoExtra = '';
+      if (isOwner && item.externalCut) {
+        const ec = item.externalCut; const sellPrice = item.promoPrice != null ? item.promoPrice : item.price; const ownerNet = sellPrice - ec;
+        promoExtra = `<div style="font-size:10px;color:#aaa;margin-top:2px;">แอดนอก ${formatPrice(ec)} ฿ · Owner ${formatPrice(ownerNet)} ฿${ownerNet < 0 ? ' <span style="color:#ff4444;">ขาดทุน!</span>' : ''}</div>`;
+      }
+      if (isExternal && typeof calcExternalCut === 'function') {
+        const sellPrice = item.promoPrice != null ? item.promoPrice : item.price; const ec = item.externalCut || calcExternalCut(sellPrice);
+        promoExtra = `<div style="font-size:10px;color:#4CAF50;margin-top:2px;">คุณได้ ${formatPrice(ec)} ฿</div>`;
+      }
+      const shareBtn = isOwner ? `<button class="badge-btn" data-action="toggleShare" data-id="${item.id}" data-shared="${!!item.sharedWithExternal}" title="${item.sharedWithExternal ? 'ยกเลิกแชร์กับภายนอก' : 'แชร์ให้แอดมินภายนอกเห็น'}" style="color:${item.sharedWithExternal ? '#ff9800' : '#555'}">${item.sharedWithExternal ? '🔗' : '🔒'}</button>` : '';
+      const activeBtn = (isOwner || isExternal) ? `<button class="badge-btn" data-action="toggleActive" data-id="${item.id}" data-active="${isActive}" title="${isActive ? 'ปิดสินค้า' : 'เปิดสินค้า'}" style="color:${isActive ? '#4CAF50' : '#ff4444'}">${isActive ? '👁' : '🚫'}</button>` : `<span style="color:${isActive ? '#4CAF50' : '#ff4444'};font-size:13px;">${isActive ? '👁' : '🚫'}</span>`;
       return `
         <tr data-id="${item.id}" style="${rowStyle}">
-          <td style="text-align:center;"><span style="color:#e0b0ff;font-weight:600;">${index + 1}</span></td>
-          <td><img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22><rect fill=%22%23333%22 width=%2250%22 height=%2250%22/></svg>'"></td>
-          <td>
+          <td data-label="#" style="text-align:center;"><span style="color:#e0b0ff;font-weight:600;">${index + 1}</span></td>
+          <td data-label="รูป"><img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22><rect fill=%22%23333%22 width=%2250%22 height=%2250%22/></svg>'"></td>
+          <td data-label="ชื่อ">
             <div class="product-name-row">
               <span>${escapeHtml(item.name)}${item.bundleQty > 1 ? ` <span style="color:#ff9800;font-size:11px;">(ชุดละ ${item.bundleQty})</span>` : ''}</span>
-              <span class="product-badges">
-                ${isOwner ? `<button class="badge-btn" data-action="toggleShare" data-id="${item.id}" data-shared="${!!item.sharedWithExternal}" title="${item.sharedWithExternal ? 'ยกเลิกแชร์กับภายนอก' : 'แชร์ให้แอดมินภายนอกเห็น'}" style="color:${item.sharedWithExternal ? '#ff9800' : '#555'}">${item.sharedWithExternal ? '🔗' : '🔒'}</button>` : ''}
-                ${(isOwner || isExternal) ? `<button class="badge-btn" data-action="toggleActive" data-id="${item.id}" data-active="${isActive}" title="${isActive ? 'ปิดสินค้า' : 'เปิดสินค้า'}" style="color:${isActive ? '#4CAF50' : '#ff4444'}">${isActive ? '👁' : '🚫'}</button>` : `<span style="color:${isActive ? '#4CAF50' : '#ff4444'};font-size:13px;">${isActive ? '👁' : '🚫'}</span>`}
-              </span>
+              <span class="product-badges">${shareBtn}${activeBtn}</span>
             </div>
           </td>
-          <td style="text-align:center;">${formatPrice(item.price)} บาท</td>
-          <td style="text-align:center;">
-            ${isOwner ? `<input type="number" step="any" min="0" class="promo-input" data-action="promo" data-id="${item.id}" data-external-cut="${item.externalCut || 0}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-">` : `<input type="number" step="any" min="0" class="promo-input" data-action="promo-request" data-id="${item.id}" data-name="${escapeHtml(item.name)}" data-current="${item.promoPrice != null ? item.promoPrice : ''}" value="${item.promoPrice != null ? item.promoPrice : ''}" placeholder="-" style="border-color:rgba(255,152,0,0.4);">`}
-            ${isOwner && item.externalCut ? (() => { const ec = item.externalCut; const sellPrice = item.promoPrice != null ? item.promoPrice : item.price; const ownerNet = sellPrice - ec; return `<div style="font-size:10px;color:#aaa;margin-top:2px;">แอดนอก ${formatPrice(ec)} ฿ · Owner ${formatPrice(ownerNet)} ฿${ownerNet < 0 ? ' <span style="color:#ff4444;">ขาดทุน!</span>' : ''}</div>`; })() : ''}
-            ${isExternal && typeof calcExternalCut === 'function' ? (() => { const sellPrice = item.promoPrice != null ? item.promoPrice : item.price; const ec = item.externalCut || calcExternalCut(sellPrice); return `<div style="font-size:10px;color:#4CAF50;margin-top:2px;">คุณได้ ${formatPrice(ec)} ฿</div>`; })() : ''}
-          </td>
-          <td style="font-weight:600;text-align:center;">${Number(item.stock) || 0}</td>
-          <td style="text-align:center;color:#4fc3f7;">${Number(item.soldCount) || 0}</td>
-          <td style="text-align:center;"><div class="stock-btn-group"><button class="btn-stock-add" data-action="addStock" data-id="${item.id}" data-name="${escapeHtml(item.name)}">+</button><button class="btn-stock-reduce" data-action="reduceStock" data-id="${item.id}" data-name="${escapeHtml(item.name)}">-</button></div></td>
-          <td style="text-align:center;"><button class="btn-icon" data-action="stockHistory" data-id="${item.id}" data-name="${escapeHtml(item.name)}">&#128065;</button></td>
-          <td style="text-align:center;white-space:nowrap;">
+          <td data-label="ราคา" style="text-align:center;">${formatPrice(item.price)} บาท</td>
+          <td data-label="โปรโมชั่น" style="text-align:center;">${promoInput}${promoExtra}</td>
+          <td data-label="Stock" style="font-weight:600;text-align:center;">${Number(item.stock) || 0}</td>
+          <td data-label="ขายได้" style="text-align:center;color:#4fc3f7;">${Number(item.soldCount) || 0}</td>
+          <td data-label="เพิ่ม/ลด" style="text-align:center;"><div class="stock-btn-group"><button class="btn-stock-add" data-action="addStock" data-id="${item.id}" data-name="${escapeHtml(item.name)}">+</button><button class="btn-stock-reduce" data-action="reduceStock" data-id="${item.id}" data-name="${escapeHtml(item.name)}">-</button></div></td>
+          <td data-label="ประวัติ" style="text-align:center;"><button class="btn-icon" data-action="stockHistory" data-id="${item.id}" data-name="${escapeHtml(item.name)}">&#128065;</button></td>
+          <td data-label="จัดการ" style="text-align:center;white-space:nowrap;">
             <button class="btn-icon" data-action="edit" data-id="${item.id}" data-name="${escapeHtml(item.name)}" data-price="${Number(item.price) || 0}" data-image="${escapeHtml(item.image || '')}" title="แก้ไข"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
             <button class="btn-icon btn-icon-danger" data-action="delete" data-id="${item.id}" title="ลบ"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
           </td>
@@ -225,6 +232,7 @@ async function flushStockAccum(itemId, itemName) {
   acc.total = 0; // reset เพื่อรับคลิกใหม่ระหว่างส่ง
   acc.sending = true;
 
+  let success = false;
   try {
     await db.runTransaction(async (transaction) => {
       const itemRef = db.collection('items').doc(itemId);
@@ -257,11 +265,17 @@ async function flushStockAccum(itemId, itemName) {
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     });
+    success = true;
   } catch (e) {
+    // คืน delta กลับเพื่อไม่ให้หายเงียบ
+    acc.total += delta;
+    showStockAccumBadge(itemId, acc.total);
     if (typeof handleQuotaError === 'function' && handleQuotaError(e, 'stockAdjust')) {
       // handled
-    } else if (e.message.startsWith('stock ไม่พอ')) {
+    } else if (e.message.startsWith('stock ไม่พอ') || e.message.startsWith('stock ของคุณ')) {
       showAlert(`${itemName}: ${e.message}`, 'stock ไม่พอ');
+      // stock ไม่พอ → ล้าง accumulated ที่คืนไป เพราะไม่ใช่ network error
+      acc.total = 0;
     } else {
       showAlert('แก้ stock ไม่ได้: ' + e.message, 'ผิดพลาด');
     }
@@ -665,7 +679,8 @@ function renderAdminStockToggles() {
       <div class="admin-stock-toggles-title">เปิด/ปิด Stock แอดมิน</div>
       <div class="admin-stock-toggle-list">
         ${visibleAdmins.map(name => {
-          const isDisabled = !!disabledAdminsCache[name];
+          const entry = disabledAdminsCache[name];
+          const isDisabled = !!entry && Object.keys(entry).length > 0;
           return `
             <div class="admin-stock-toggle-item ${isDisabled ? 'disabled' : ''}">
               <span class="admin-stock-toggle-name">${escapeHtml(name)}</span>
@@ -814,16 +829,14 @@ async function toggleAdminStock(adminName, enabling) {
 
     const savedAmounts = {};
     const aliases = typeof getAdminAliases === 'function' ? getAdminAliases(adminName) : [adminName];
-    // ถ้า allProducts ว่าง (quota mode) ให้ fetch จาก Firestore ตรงๆ
-    let productList = allProducts;
-    if (!productList || productList.length === 0) {
-      try {
-        const snap = await db.collection('items').get();
-        productList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      } catch (e) {
-        showAlert('โหลดสินค้าไม่ได้: ' + e.message, 'ผิดพลาด');
-        return;
-      }
+    // อ่าน stock สดจาก Firestore เสมอ (ไม่ใช้ cache — ป้องกัน race condition)
+    let productList;
+    try {
+      const snap = await db.collection('items').get();
+      productList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+      showAlert('โหลดสินค้าไม่ได้: ' + e.message, 'ผิดพลาด');
+      return;
     }
     for (const item of productList) {
       const adminStockMap = item.adminStock || {};
@@ -2068,8 +2081,7 @@ async function approvePendingAction(actionId) {
         updateData.promoExpiresAt = firebase.firestore.FieldValue.delete();
       } else {
         updateData.promoPrice = d.newPromo;
-        // ไม่ต้องตั้ง expiry — โปรคงอยู่จนกว่า admin จะลบ
-        updateData.promoExpiresAt = firebase.firestore.FieldValue.delete();
+        // expiry จัดการแยกผ่าน promoExpiry input
       }
       await db.collection('items').doc(d.itemId).update(updateData);
       showToast('ตั้งราคาโปร ' + d.itemName + ' แล้ว');

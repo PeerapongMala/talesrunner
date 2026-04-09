@@ -21,7 +21,11 @@ function openItemModal(itemId) {
   document.getElementById("modalItemName").textContent = currentItem.name + (bq > 1 ? ` (ชุดละ ${bq} ชิ้น)` : '');
   document.getElementById("modalItemPriceUnit").innerHTML =
     isPromoValid(currentItem)
-      ? `${currentItem.promoExpiresAt ? `<div class="promo-countdown" data-expires="${currentItem.promoExpiresAt.toMillis()}"></div>` : '<div class="promo-badge-permanent">โปรโมชั่น</div>'}
+      ? `${currentItem.promoExpiresAt
+          ? `<div class="promo-countdown" data-expires="${currentItem.promoExpiresAt.toMillis()}"></div>`
+          : (currentShopState === 'force_open'
+            ? '<div class="promo-badge-permanent">โปรโมชั่น</div>'
+            : `<div class="promo-countdown" data-expires="${getNextCloseTimestamp()}"></div>`)}
          <span class="original-price">${priceUnit} ${formatPrice(currentItem.price * bq)} บาท</span> <span class="promo-price">${priceUnit} ${formatPrice(currentItem.promoPrice * bq)} บาท</span>`
       : `${priceUnit} ${formatPrice(getPrice(currentItem) * bq)} บาท`;
   const stockLabel = bq > 1 ? `เหลือ ${canAddBundles} ชุด` : `เหลือ ${canAddBundles} ชิ้น`;

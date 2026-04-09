@@ -2,9 +2,9 @@
 // BubbleShop - Reservation System (จองสินค้า)
 // ============================================
 
-const RESERVATION_TTL = 15 * 60 * 1000; // 15 นาที
-const HEARTBEAT_INTERVAL = 5 * 60 * 1000; // 5 นาที
-const STALE_CLEANUP_THRESHOLD = 30 * 60 * 1000; // 30 นาที
+const RESERVATION_TTL = 5 * 60 * 1000; // 5 นาที (ลดจาก 15 เพื่อลด stale)
+const HEARTBEAT_INTERVAL = 2 * 60 * 1000; // 2 นาที (ลดจาก 5 เพื่อต่ออายุถี่ขึ้น)
+const STALE_CLEANUP_THRESHOLD = 6 * 60 * 1000; // 6 นาที (ลบเร็วขึ้นจาก 30)
 
 let _heartbeatTimer = null;
 let _reservationExists = false;
@@ -117,10 +117,10 @@ function _startReservationListener() {
         .filter(r => r.expiresAt && r.expiresAt.toMillis() > now)
         .filter(r => r.sessionId !== _sessionId);
 
-      // Opportunistic cleanup: ลบ reservation เก่ามาก (> 30 นาที)
+      // Cleanup: ลบ reservation ที่หมดอายุแล้ว (ไม่รอนาน ลบทันที)
       snapshot.docs.forEach(doc => {
         const data = doc.data();
-        if (data.expiresAt && data.expiresAt.toMillis() < now - STALE_CLEANUP_THRESHOLD) {
+        if (data.expiresAt && data.expiresAt.toMillis() < now) {
           db.collection('reservations').doc(doc.id).delete().catch(() => {});
         }
       });

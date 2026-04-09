@@ -663,6 +663,9 @@ function askCloseReason() {
 
 // ============ SHOP OPEN/CLOSE TOGGLE ============
 let _shopToggleInitialized = false;
+// ค่าเริ่มต้น — จะถูก override จาก Firestore
+let _adminShopHours = { weekday: { open: '20:00', close: '01:00' }, weekend: { open: '10:00', close: '23:59' } };
+
 function listenShopToggle() {
   const btn = document.getElementById('shopToggleBtn');
   const modal = document.getElementById('shopStateModal');
@@ -672,15 +675,7 @@ function listenShopToggle() {
   const cancelBtn = document.getElementById('shopStateCancelBtn');
 
   function isWithinShopHours() {
-    const now = new Date();
-    const day = now.getDay();
-    const hour = now.getHours();
-
-    // กะดึก: เที่ยงคืนถึงตีหนึ่ง ของวัน อ.(2)-ส.(6) ต่อจากคืนก่อนหน้า
-    if (hour === 0 && day >= 2 && day <= 6) return true;
-
-    if (day === 0 || day === 6) return hour >= 10; // เสาร์-อาทิตย์ เปิด 10:00
-    return hour >= 20; // จันทร์-ศุกร์ เปิด 20:00
+    return checkShopHours(_adminShopHours);
   }
 
   function updateBtn(mode) {
@@ -715,6 +710,19 @@ function listenShopToggle() {
       } else if (currentMode !== 'force_close') {
         if (typeof restoreQuotaBadgeToOk === 'function') restoreQuotaBadgeToOk();
       }
+      // โหลดเวลาเปิด/ปิดจาก Firestore
+      if (data.shopHours) {
+        _adminShopHours = data.shopHours;
+      }
+      // อัปเดต input fields
+      const wdO = document.getElementById('weekdayOpen');
+      const wdC = document.getElementById('weekdayClose');
+      const weO = document.getElementById('weekendOpen');
+      const weC = document.getElementById('weekendClose');
+      if (wdO) wdO.value = _adminShopHours.weekday.open;
+      if (wdC) wdC.value = _adminShopHours.weekday.close;
+      if (weO) weO.value = _adminShopHours.weekend.open;
+      if (weC) weC.value = _adminShopHours.weekend.close;
     } else {
       currentMode = 'auto';
       if (_payModeCallback) _payModeCallback('both');
@@ -781,6 +789,34 @@ function listenShopToggle() {
     btnAuto.addEventListener('click', () => setShopMode('auto'));
     btnForceOpen.addEventListener('click', () => setShopMode('force_open'));
     btnForceClose.addEventListener('click', () => setShopMode('force_close'));
+
+    // บันทึกเวลาเปิด/ปิดร้าน
+    const saveHoursBtn = document.getElementById('saveShopHoursBtn');
+    if (saveHoursBtn) {
+      saveHoursBtn.addEventListener('click', async () => {
+        const timeRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+        const vals = ['weekdayOpen','weekdayClose','weekendOpen','weekendClose'].map(id => document.getElementById(id).value.trim());
+        if (!vals.every(v => timeRe.test(v))) {
+          showAlert('รูปแบบเวลาไม่ถูก — ใช้ HH:MM (24 ชม.) เช่น 20:00, 01:00', 'ผิดพลาด');
+          return;
+        }
+        const hours = {
+          weekday: { open: vals[0], close: vals[1] },
+          weekend: { open: vals[2], close: vals[3] }
+        };
+        saveHoursBtn.disabled = true;
+        try {
+          await db.collection('settings').doc('shop').set({ shopHours: hours }, { merge: true });
+          _adminShopHours = hours;
+          updateBtn(currentMode);
+          showToast('บันทึกเวลาเปิด/ปิดร้านแล้ว');
+        } catch (err) {
+          showAlert('บันทึกไม่ได้: ' + err.message, 'ผิดพลาด');
+        } finally {
+          saveHoursBtn.disabled = false;
+        }
+      });
+    }
   }
 }
 
