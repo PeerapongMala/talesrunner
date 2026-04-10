@@ -613,10 +613,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const btn = e.target.closest('[data-action="deleteAdminHistory"]');
     if (!btn) return;
     const { itemId, rawKeys, name } = btn.dataset;
-    if (!await showConfirm('ลบประวัติ Stock ทั้งหมดของ "' + name + '" ในสินค้านี้?', 'ยืนยันลบ')) return;
+    if (!await showConfirm(
+      'ลบประวัติ Stock ของ "' + name + '" ในสินค้านี้?\n\n' +
+      '• ประวัติ stock → ลบหมด\n' +
+      '• stock รวม → หักตามจำนวนที่ ' + name + ' เคยเพิ่ม\n' +
+      '• adminStock → ลบออก',
+      'ยืนยันลบ'
+    )) return;
     try {
       const keys = rawKeys.split('||');
-      const histSnap = await db.collection('items').doc(itemId).collection('stockHistory').get();
+      const itemRef = db.collection('items').doc(itemId);
+
+      // อ่าน adminStock จริงจาก Firestore แล้วหักจาก stock ด้วย
+      const itemDoc = await itemRef.get();
+      let adminStockVal = 0;
+      if (itemDoc.exists) {
+        const iData = itemDoc.data();
+        // หาค่า adminStock จาก key ที่ตรงกับ name (อาจมี alias)
+        for (const k of keys) {
+          adminStockVal += typeof getAdminStockValue === 'function'
+            ? getAdminStockValue(iData.adminStock || {}, k)
+            : (Number((iData.adminStock || {})[k]) || 0);
+        }
+      }
+
+      const histSnap = await itemRef.collection('stockHistory').get();
       const batch = db.batch();
       let count = 0;
       histSnap.docs.forEach(doc => {
@@ -625,8 +646,31 @@ document.addEventListener('DOMContentLoaded', () => {
           count++;
         }
       });
-      if (count > 0) await batch.commit();
-      showToast('ลบประวัติ ' + name + ' แล้ว (' + count + ' รายการ)');
+
+      // หัก stock + ลบ adminStock ของ admin คนนี้
+      if (adminStockVal > 0) {
+        const currentStock = itemDoc.exists ? (Number(itemDoc.data().stock) || 0) : 0;
+        const deduct = Math.min(adminStockVal, currentStock); // ไม่ให้ติดลบ
+        const updateData = { stock: firebase.firestore.FieldValue.increment(-deduct) };
+        // ลบ adminStock ทุก key ที่เกี่ยว
+        for (const k of keys) {
+          updateData['adminStock.' + k] = firebase.firestore.FieldValue.delete();
+        }
+        batch.update(itemRef, updateData);
+      } else {
+        // adminStock = 0 แต่ยังลบ key ทิ้ง
+        const updateData = {};
+        for (const k of keys) {
+          updateData['adminStock.' + k] = firebase.firestore.FieldValue.delete();
+        }
+        if (Object.keys(updateData).length > 0) batch.update(itemRef, updateData);
+      }
+
+      if (count > 0 || adminStockVal > 0) await batch.commit();
+      const msg = adminStockVal > 0
+        ? 'ลบประวัติ ' + name + ' แล้ว (' + count + ' รายการ) — stock หัก ' + Math.min(adminStockVal, itemDoc.exists ? (Number(itemDoc.data().stock) || 0) : 0)
+        : 'ลบประวัติ ' + name + ' แล้ว (' + count + ' รายการ)';
+      showToast(msg);
       // refresh modal
       const itemName = document.getElementById('stockHistoryModal').querySelector('h2')?.textContent?.replace('ประวัติ Stock', '').trim() || '';
       openStockHistory(itemId, itemName);
