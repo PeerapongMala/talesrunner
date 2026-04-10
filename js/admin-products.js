@@ -414,18 +414,16 @@ async function openStockHistory(itemId, itemName) {
       return;
     }
 
-    // สรุปยอดแต่ละคน — เพิ่ม / ส่งของ / คงเหลือ (ตามจริง)
-    const adminAdded = {};     // ยอดเพิ่ม (+) ของแต่ละ admin
-    const adminDelivered = {}; // ยอดส่ง (-) ของแต่ละ admin
+    // สรุปยอดแต่ละคน — ใช้ adminStock จริงจาก Firestore (ไม่คำนวณจาก history)
     const adminRawKeys = {};   // map resolvedName → Set of raw addedBy values
-    let historyTotal = 0;
+    const adminAdded = {};     // ยอดเพิ่ม (+) จาก history
+    const adminDelivered = {}; // ยอดส่ง (-) จาก history
 
     snapshot.docs.forEach(doc => {
       const h = doc.data();
       const raw = h.addedBy || 'ไม่ระบุ';
       const who = typeof resolveAdminName === 'function' ? resolveAdminName(raw) : raw;
       const qty = h.qty || 0;
-      historyTotal += qty;
 
       if (!adminRawKeys[who]) adminRawKeys[who] = new Set();
       adminRawKeys[who].add(raw);
@@ -437,51 +435,36 @@ async function openStockHistory(itemId, itemName) {
       }
     });
 
-    // stock จริง + ยอดรอส่ง
+    // ใช้ adminStock จริง — ไม่ใช้ redistribution logic ที่ทำเลขเพี้ยน
     const product = allProducts.find(p => p.id === itemId);
     const actualStock = product ? (Number(product.stock) || 0) : 0;
-    const pending = historyTotal - actualStock; // order ที่ซื้อแล้วแต่ยังไม่กดส่ง
+    const realAdminStock = product && product.adminStock ? product.adminStock : {};
 
-    // สร้าง summary แต่ละ admin
-    const allAdmins = new Set([...Object.keys(adminAdded), ...Object.keys(adminDelivered)]);
-    const adminNets = {};
-    allAdmins.forEach(name => {
-      const added = adminAdded[name] || 0;
-      const delivered = adminDelivered[name] || 0;
-      adminNets[name] = added - delivered;
-    });
-
-    // Pass 2: ข้อมูลเก่า — ถ้า admin ไหนติดลบ (หักคนเดียว) → ย้ายส่วนลบไปคนอื่นตามสัดส่วน
-    let fixNeeded = true;
-    while (fixNeeded) {
-      fixNeeded = false;
-      for (const [negName, negNet] of Object.entries(adminNets)) {
-        if (negNet >= 0) continue;
-        const deficit = Math.abs(negNet);
-        adminNets[negName] = 0;
-
-        const posEntries = Object.entries(adminNets).filter(([n, v]) => n !== negName && v > 0);
-        const totalPos = posEntries.reduce((s, [, v]) => s + v, 0);
-        if (totalPos === 0) break;
-
-        let remaining = deficit;
-        posEntries.forEach(([posName, posNet], i) => {
-          const share = (i === posEntries.length - 1) ? remaining : Math.round(deficit * (posNet / totalPos));
-          adminNets[posName] -= share;
-          remaining -= share;
-        });
-        fixNeeded = true;
-        break; // restart loop after redistribution
-      }
+    // รวม admin จาก history + adminStock
+    const allAdminNames = new Set([...Object.keys(adminAdded), ...Object.keys(adminDelivered)]);
+    // เพิ่ม admin จาก adminStock ที่มี key อยู่จริง
+    for (const rawKey of Object.keys(realAdminStock)) {
+      const resolved = typeof resolveAdminName === 'function' ? resolveAdminName(rawKey) : rawKey;
+      allAdminNames.add(resolved);
+      if (!adminRawKeys[resolved]) adminRawKeys[resolved] = new Set();
+      adminRawKeys[resolved].add(rawKey);
     }
 
     const adminSummary = [];
-    allAdmins.forEach(name => {
+    allAdminNames.forEach(name => {
+      // หายอด adminStock จริงจาก Firestore
+      const aliases = adminRawKeys[name] ? [...adminRawKeys[name]] : [name];
+      let realNet = 0;
+      for (const alias of aliases) {
+        realNet += typeof getAdminStockValue === 'function'
+          ? getAdminStockValue(realAdminStock, alias)
+          : (Number(realAdminStock[alias]) || 0);
+      }
       adminSummary.push({
         name,
         added: adminAdded[name] || 0,
         delivered: adminDelivered[name] || 0,
-        net: adminNets[name]
+        net: realNet
       });
     });
 
@@ -495,10 +478,14 @@ async function openStockHistory(itemId, itemName) {
             ${isOwner ? `<button class="btn-icon btn-icon-danger" style="font-size:10px;padding:2px 6px;margin-left:4px;" data-action="deleteAdminHistory" data-item-id="${itemId}" data-raw-keys="${escapeHtml([...adminRawKeys[a.name]].join('||'))}" data-name="${escapeHtml(a.name)}" title="ลบประวัติ ${escapeHtml(a.name)}">x</button>` : ''}
           </div>`
         ).join('')}
-        ${pending > 0 ? `<div class="stock-summary-item" style="color:#ff9800;">
-          <span>รอส่ง</span>
-          <span style="font-weight:700;">${pending}</span>
-        </div>` : ''}
+        ${(() => {
+          const totalAdminStock = adminSummary.reduce((s, a) => s + a.net, 0);
+          const pending = totalAdminStock - actualStock;
+          return pending > 0 ? `<div class="stock-summary-item" style="color:#ff9800;">
+            <span>รอส่ง (ถูกสั่งแล้ว)</span>
+            <span style="font-weight:700;">${pending}</span>
+          </div>` : '';
+        })()}
         <div class="stock-summary-total">
           <span>คงเหลือจริง</span>
           <span style="font-weight:700;">${actualStock}</span>
@@ -944,6 +931,59 @@ async function saveStockSnapshot() {
     if (infoEl) infoEl.textContent = `ล่าสุด: ${label}`;
   } catch (e) {
     showAlert('บันทึกไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+// Auto-snapshot: บันทึก stock อัตโนมัติหลัง order complete (เรียกจาก admin-orders.js)
+async function autoStockSnapshot(reason, orderId) {
+  try {
+    // ป้องกันถี่เกินไป — บันทึกได้ทุก 1 นาทีเท่านั้น
+    const lastAuto = sessionStorage.getItem('lastAutoSnapshot');
+    if (lastAuto && Date.now() - parseInt(lastAuto, 10) < 60000) return;
+
+    const itemsSnap = await db.collection('items').get();
+    const data = {};
+    itemsSnap.forEach(doc => {
+      const d = doc.data();
+      data[doc.id] = {
+        name: d.name || '',
+        stock: Number(d.stock) || 0,
+        adminStock: d.adminStock || {}
+      };
+    });
+
+    const now = new Date();
+    const label = 'Auto: ' + now.toLocaleString('th-TH', {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+
+    await db.collection('stock_snapshots').add({
+      label,
+      itemCount: Object.keys(data).length,
+      data,
+      reason: reason || 'auto',
+      orderId: orderId || null,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentAdminName || 'system',
+      auto: true
+    });
+
+    sessionStorage.setItem('lastAutoSnapshot', Date.now().toString());
+
+    // ลบ auto snapshot เก่า เก็บไว้แค่ 20 อันล่าสุด
+    const oldSnaps = await db.collection('stock_snapshots')
+      .where('auto', '==', true)
+      .orderBy('createdAt', 'desc')
+      .get();
+    if (oldSnaps.docs.length > 20) {
+      const toDelete = oldSnaps.docs.slice(20);
+      const batch = db.batch();
+      toDelete.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+  } catch (e) {
+    console.warn('autoStockSnapshot failed:', e.message);
   }
 }
 

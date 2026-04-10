@@ -359,6 +359,13 @@ async function confirmDeliver() {
 
     closeDeliverModal();
     showToast('บันทึกการส่งของแล้ว');
+
+    // Auto-snapshot: บันทึก stock อัตโนมัติหลัง order complete (เพื่อ rollback ได้)
+    const cachedOrderCheck = loadedOrdersCache[orderId];
+    if (cachedOrderCheck && cachedOrderCheck.status === 'completed') {
+      autoStockSnapshot('order_completed', orderId);
+    }
+
     // reload completed orders จาก server (background)
     if (typeof loadCompletedOrders === 'function') loadCompletedOrders();
   } catch (e) {
