@@ -624,52 +624,49 @@ document.addEventListener('DOMContentLoaded', () => {
       const keys = rawKeys.split('||');
       const itemRef = db.collection('items').doc(itemId);
 
-      // อ่าน adminStock จริงจาก Firestore แล้วหักจาก stock ด้วย
-      const itemDoc = await itemRef.get();
-      let adminStockVal = 0;
-      if (itemDoc.exists) {
-        const iData = itemDoc.data();
-        // หาค่า adminStock จาก key ที่ตรงกับ name (อาจมี alias)
-        for (const k of keys) {
-          adminStockVal += typeof getAdminStockValue === 'function'
-            ? getAdminStockValue(iData.adminStock || {}, k)
-            : (Number((iData.adminStock || {})[k]) || 0);
-        }
-      }
-
+      // อ่าน stockHistory ก่อน (ไม่สามารถ get collection ใน transaction ได้)
       const histSnap = await itemRef.collection('stockHistory').get();
-      const batch = db.batch();
-      let count = 0;
-      histSnap.docs.forEach(doc => {
-        if (keys.includes(doc.data().addedBy || '')) {
-          batch.delete(doc.ref);
-          count++;
+      const histDocsToDelete = histSnap.docs.filter(doc => keys.includes(doc.data().addedBy || ''));
+
+      // ใช้ transaction สำหรับ item doc เพื่อ atomic read+write stock
+      const result = await db.runTransaction(async (transaction) => {
+        const itemDoc = await transaction.get(itemRef);
+        let adminStockVal = 0;
+        if (itemDoc.exists) {
+          const iData = itemDoc.data();
+          for (const k of keys) {
+            adminStockVal += typeof getAdminStockValue === 'function'
+              ? getAdminStockValue(iData.adminStock || {}, k)
+              : (Number((iData.adminStock || {})[k]) || 0);
+          }
         }
+
+        // ลบ stockHistory docs ภายใน transaction
+        histDocsToDelete.forEach(doc => transaction.delete(doc.ref));
+
+        // หัก stock + ลบ adminStock ของ admin คนนี้
+        if (adminStockVal > 0) {
+          const currentStock = itemDoc.exists ? (Number(itemDoc.data().stock) || 0) : 0;
+          const deduct = Math.min(adminStockVal, currentStock);
+          const updateData = { stock: firebase.firestore.FieldValue.increment(-deduct) };
+          for (const k of keys) {
+            updateData['adminStock.' + k] = firebase.firestore.FieldValue.delete();
+          }
+          transaction.update(itemRef, updateData);
+        } else {
+          const updateData = {};
+          for (const k of keys) {
+            updateData['adminStock.' + k] = firebase.firestore.FieldValue.delete();
+          }
+          if (Object.keys(updateData).length > 0) transaction.update(itemRef, updateData);
+        }
+
+        return { count: histDocsToDelete.length, adminStockVal, currentStock: itemDoc.exists ? (Number(itemDoc.data().stock) || 0) : 0 };
       });
 
-      // หัก stock + ลบ adminStock ของ admin คนนี้
-      if (adminStockVal > 0) {
-        const currentStock = itemDoc.exists ? (Number(itemDoc.data().stock) || 0) : 0;
-        const deduct = Math.min(adminStockVal, currentStock); // ไม่ให้ติดลบ
-        const updateData = { stock: firebase.firestore.FieldValue.increment(-deduct) };
-        // ลบ adminStock ทุก key ที่เกี่ยว
-        for (const k of keys) {
-          updateData['adminStock.' + k] = firebase.firestore.FieldValue.delete();
-        }
-        batch.update(itemRef, updateData);
-      } else {
-        // adminStock = 0 แต่ยังลบ key ทิ้ง
-        const updateData = {};
-        for (const k of keys) {
-          updateData['adminStock.' + k] = firebase.firestore.FieldValue.delete();
-        }
-        if (Object.keys(updateData).length > 0) batch.update(itemRef, updateData);
-      }
-
-      if (count > 0 || adminStockVal > 0) await batch.commit();
-      const msg = adminStockVal > 0
-        ? 'ลบประวัติ ' + name + ' แล้ว (' + count + ' รายการ) — stock หัก ' + Math.min(adminStockVal, itemDoc.exists ? (Number(itemDoc.data().stock) || 0) : 0)
-        : 'ลบประวัติ ' + name + ' แล้ว (' + count + ' รายการ)';
+      const msg = result.adminStockVal > 0
+        ? 'ลบประวัติ ' + name + ' แล้ว (' + result.count + ' รายการ) — stock หัก ' + Math.min(result.adminStockVal, result.currentStock)
+        : 'ลบประวัติ ' + name + ' แล้ว (' + result.count + ' รายการ)';
       showToast(msg);
       // refresh modal
       const itemName = document.getElementById('stockHistoryModal').querySelector('h2')?.textContent?.replace('ประวัติ Stock', '').trim() || '';
