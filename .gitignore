@@ -19,6 +19,15 @@ REVIEW.md
 TODO-SECURITY.md
 prompt.md
 
+# Playwright / E2E test artifacts
+.playwright-mcp/
+playwright-report/
+test-results/
+tests/
+playwright.config.js
+package.json
+package-lock.json
+
 # Images
 *.png
 assets/*.png

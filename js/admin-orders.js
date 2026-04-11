@@ -796,6 +796,21 @@ async function recalculateRevenue() {
 async function markOrderPaid(orderId) {
   try {
     await db.collection('orders').doc(orderId).update({ paymentMode: 'paid' });
+    // อัพเดต DOM ทันทีไม่ต้อง F5 (completed orders ไม่ได้ฟัง real-time)
+    const card = document.querySelector(`.admin-order-card[data-order-id="${orderId}"]`);
+    if (card) {
+      const btn = card.querySelector('[data-action="markPaid"]');
+      if (btn) {
+        const parent = btn.parentElement;
+        // ลบปุ่ม + ข้อความเดิม แล้วใส่ "โอนแล้ว" สีเขียว
+        const unpaidLabel = parent.querySelector('span[style*="ff9800"]');
+        if (unpaidLabel) unpaidLabel.remove();
+        btn.insertAdjacentHTML('beforebegin', '<span style="color:#4CAF50;font-size:12px;font-weight:600;">โอนแล้ว</span>');
+        btn.remove();
+      }
+    }
+    // re-fetch completed cache ด้วย (กันกรณี re-render ทับ)
+    if (typeof loadCompletedOrders === 'function') loadCompletedOrders();
     showToast('อัปเดตเป็น "โอนแล้ว"');
   } catch (e) {
     showAlert('อัปเดตไม่ได้: ' + e.message, 'ผิดพลาด');
