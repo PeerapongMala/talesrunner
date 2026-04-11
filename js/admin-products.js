@@ -642,6 +642,7 @@ async function resetAllStockToZero() {
 // ============ ADMIN STOCK TOGGLE (เปิด/ปิด stock แอดมิน) ============
 let disabledAdminsCache = {}; // { adminName: { itemId: qty } }
 let unsubAdminStock = null;
+let _toggleInProgress = false; // ป้องกัน onSnapshot re-render ระหว่างกำลัง toggle
 
 function renderAdminStockToggles() {
   const container = document.getElementById('adminStockToggles');
@@ -655,6 +656,8 @@ function renderAdminStockToggles() {
 
   function processAdminStockDoc(doc) {
     disabledAdminsCache = (doc.exists && doc.data().disabled) ? doc.data().disabled : {};
+    // ถ้ากำลัง toggle อยู่ ไม่ re-render (ป้องกัน toggle กลับเป็นสถานะเดิม)
+    if (_toggleInProgress) return;
 
     // หาแอดมินที่ถูกลบจากระบบแล้ว แต่ยัง disabled อยู่ใน settings
     const orphanedAdmins = Object.keys(disabledAdminsCache).filter(name =>
@@ -749,6 +752,12 @@ function renderAdminStockToggles() {
 }
 
 async function toggleAdminStock(adminName, enabling) {
+  _toggleInProgress = true;
+  try { return await _doToggleAdminStock(adminName, enabling); }
+  finally { _toggleInProgress = false; }
+}
+
+async function _doToggleAdminStock(adminName, enabling) {
   if (enabling) {
     // คืน stock — ดึงข้อมูลจาก Firestore ตรงๆ ไม่พึ่ง cache (อาจ stale)
     let saved = disabledAdminsCache[adminName];
@@ -1012,7 +1021,7 @@ async function listStockSnapshots() {
       const d = doc.data();
       const date = d.createdAt ? d.createdAt.toDate().toLocaleString('th-TH') : d.label || '-';
       return `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #333;gap:8px;">
+        <div class="snap-row" style="display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid #333;gap:8px;">
           <div style="flex:1;min-width:0;">
             <div style="font-weight:500;color:#e0b0ff;">${escapeHtml(d.label || date)}</div>
             <div style="font-size:11px;color:#aaa;">${d.itemCount || '?'} สินค้า · โดย ${escapeHtml(d.createdBy || '-')}</div>
@@ -1043,8 +1052,8 @@ async function listStockSnapshots() {
     overlay.addEventListener('click', async (e) => {
       const restoreBtn = e.target.closest('[data-action="restoreSnap"]');
       if (restoreBtn) {
-        await restoreStockSnapshot(restoreBtn.dataset.id);
         overlay.remove();
+        await restoreStockSnapshot(restoreBtn.dataset.id);
         return;
       }
       const deleteBtn = e.target.closest('[data-action="deleteSnap"]');
@@ -1053,7 +1062,7 @@ async function listStockSnapshots() {
         if (!ok) return;
         try {
           await db.collection('stock_snapshots').doc(deleteBtn.dataset.id).delete();
-          deleteBtn.closest('div[style]').remove();
+          deleteBtn.closest('.snap-row').remove();
           showToast('ลบ snapshot แล้ว');
         } catch (err) {
           showAlert('ลบไม่ได้: ' + err.message, 'ผิดพลาด');
@@ -1090,10 +1099,12 @@ async function restoreStockSnapshot(snapshotId) {
     for (let i = 0; i < entries.length; i += 499) {
       const batch = db.batch();
       entries.slice(i, i + 499).forEach(([itemId, val]) => {
+        // ใช้ mergeFields แทน merge:true เพื่อเขียนทับ adminStock ทั้งก้อน
+        // (merge:true จะ deep-merge adminStock ทำให้ key เก่าไม่หายไป)
         batch.set(db.collection('items').doc(itemId), {
           stock: val.stock || 0,
           adminStock: val.adminStock || {}
-        }, { merge: true });
+        }, { mergeFields: ['stock', 'adminStock'] });
       });
       await batch.commit();
     }

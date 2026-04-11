@@ -470,49 +470,53 @@ async function cancelOrder(orderId) {
         }
       }
 
-      // คืน stock ทุกไอเทม: ส่วนที่ยังไม่ส่ง (item.qty - delivered) คืน stock เฉยๆ
-      // ส่วนที่ส่งแล้วจะคืนทั้ง stock + adminStock ด้านล่าง
+      // รวม stock ที่ต้องคืนต่อ item ไว้ก่อน แล้วเขียนทีเดียว
+      // (Firestore transaction เขียน doc เดียวกันหลายครั้ง → เฉพาะครั้งสุดท้ายมีผล)
+      const restoreMap = {}; // { itemId: { stock, adminStock: { name: qty }, historyEntries: [] } }
+
+      // ส่วนที่ยังไม่ส่ง (checkout หักไปแล้วตอนสั่ง)
       for (const item of items) {
         if (!item.itemId) continue;
         const delivered = deliveredPerItem[item.itemId] || 0;
         const undelivered = item.qty - delivered;
-        // คืน stock ส่วนที่ยังไม่ส่ง (checkout หักไปแล้วตอนสั่ง)
         if (undelivered > 0) {
-          transaction.update(db.collection('items').doc(item.itemId), {
-            stock: firebase.firestore.FieldValue.increment(undelivered)
+          if (!restoreMap[item.itemId]) restoreMap[item.itemId] = { stock: 0, adminStock: {}, history: [] };
+          restoreMap[item.itemId].stock += undelivered;
+          restoreMap[item.itemId].history.push({
+            qty: undelivered, addedBy: 'system', note: 'คืน stock ยังไม่ส่ง (ยกเลิก order)'
           });
-          transaction.set(
-            db.collection('items').doc(item.itemId).collection('stockHistory').doc(),
-            {
-              qty: undelivered,
-              addedBy: 'system',
-              note: 'คืน stock ยังไม่ส่ง (ยกเลิก order)',
-              createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            }
-          );
         }
       }
 
-      // ย้อน delivery ที่เคยส่งไป → คืน stock + adminStock + stockHistory
+      // ส่วนที่ส่งแล้ว → คืนทั้ง stock + adminStock
       for (const del of deliveries) {
         if (!del.itemId || !del.by) continue;
-        // คืน stock ส่วนที่ส่งแล้ว
-        transaction.update(db.collection('items').doc(del.itemId), {
-          stock: firebase.firestore.FieldValue.increment(del.qty)
+        if (!restoreMap[del.itemId]) restoreMap[del.itemId] = { stock: 0, adminStock: {}, history: [] };
+        restoreMap[del.itemId].stock += del.qty;
+        restoreMap[del.itemId].adminStock[del.by] = (restoreMap[del.itemId].adminStock[del.by] || 0) + del.qty;
+        restoreMap[del.itemId].history.push({
+          qty: del.qty, addedBy: del.by, note: 'คืน stock ส่งแล้ว (ยกเลิก order)'
         });
-        // คืน adminStock ด้วย (ป้องกัน stock กับ adminStock เบี้ยว)
-        transaction.set(db.collection('items').doc(del.itemId), {
-          adminStock: { [del.by]: firebase.firestore.FieldValue.increment(del.qty) }
-        }, { merge: true });
-        transaction.set(
-          db.collection('items').doc(del.itemId).collection('stockHistory').doc(),
-          {
-            qty: del.qty,
-            addedBy: del.by,
-            note: 'คืน stock ส่งแล้ว (ยกเลิก order)',
+      }
+
+      // เขียน Firestore — แต่ละ item เขียนครั้งเดียว
+      for (const [itemId, restore] of Object.entries(restoreMap)) {
+        const itemRef = db.collection('items').doc(itemId);
+        const updateData = {
+          stock: firebase.firestore.FieldValue.increment(restore.stock)
+        };
+        // รวม adminStock increments
+        for (const [adminName, qty] of Object.entries(restore.adminStock)) {
+          updateData['adminStock.' + adminName] = firebase.firestore.FieldValue.increment(qty);
+        }
+        transaction.update(itemRef, updateData);
+        // stockHistory entries (subcollection docs ไม่ซ้ำกัน — เขียนหลาย doc ได้)
+        for (const entry of restore.history) {
+          transaction.set(itemRef.collection('stockHistory').doc(), {
+            ...entry,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          }
-        );
+          });
+        }
       }
 
       // คืนยอดใช้คูปอง
@@ -924,7 +928,7 @@ function updateRevenueSummary(orderDocs) {
       <div class="revenue-summary">
         <div class="revenue-header">
           <span>สรุปยอดขายแอดมิน</span>
-          <span style="display:flex;align-items:center;gap:10px;">
+          <span class="revenue-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
             <span class="revenue-total">${formatPrice(totalRevenue)} บาท</span>
             <button class="btn-secondary" style="padding:4px 10px;font-size:11px;width:auto;" onclick="recalculateRevenue()">🔄 คำนวณใหม่</button>
             <button class="btn-secondary" style="padding:4px 10px;font-size:11px;width:auto;color:#ff9800;border-color:#ff9800;" onclick="resetRevenueSummary()">รีเซ็ต</button>
