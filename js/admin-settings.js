@@ -346,7 +346,16 @@ function loadOrders() {
   }
 
   unsubOrders = pendingQuery.onSnapshot(
-    snapshot => renderCombined(snapshot.docs),
+    snapshot => {
+      // ถ้ามี doc หายจาก pending (เปลี่ยนเป็น completed/cancelled) → re-fetch completed
+      const hasRemoved = snapshot.docChanges().some(c => c.type === 'removed');
+      if (hasRemoved) {
+        _lastPendingSnapshot = snapshot.docs;
+        loadCompletedOrders(); // async — จะ re-render พร้อม completed ใหม่
+      } else {
+        renderCombined(snapshot.docs);
+      }
+    },
     e => {
       console.error(e);
       if (typeof handleQuotaError === 'function') handleQuotaError(e, 'loadOrders');

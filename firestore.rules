@@ -32,7 +32,7 @@ service cloud.firestore {
                         && request.resource.data.stock < resource.data.stock);
 
       match /stockHistory/{historyId} {
-        allow read: if true;
+        allow read: if isAdmin();
         allow delete: if isAdmin();
         allow create: if isAdmin()
                       && request.resource.data.qty is number
