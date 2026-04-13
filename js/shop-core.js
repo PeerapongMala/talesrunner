@@ -12,8 +12,7 @@ function isPromoValid(item) {
   if (item.promoExpiresAt && Date.now() < item.promoExpiresAt.toMillis()) {
     return true; // ยังไม่หมด expiry ที่ตั้งไว้
   }
-  // ไม่มี expiry หรือ expiry หมดแล้ว → โปรอิงเวลาร้านเปิด
-  if (currentShopState === 'force_open') return true;
+  // ไม่มี expiry หรือ expiry หมดแล้ว → โปรอิงเวลา auto schedule เสมอ
   return isWithinShopHours();
 }
 function getPrice(item) {
@@ -56,13 +55,13 @@ function getNextCloseTimestamp() {
 
 // Promo Countdown — global function เรียกได้จากทุกที่
 function updatePromoCountdowns() {
+  let anyExpired = false;
   document.querySelectorAll(".promo-countdown").forEach((el) => {
     const expiresText = el.getAttribute("data-expires");
     if (!expiresText) return;
     const remain = parseInt(expiresText, 10) - Date.now();
     if (remain <= 0) {
-      el.textContent = "⏱ หมดโปรโมชั่นแล้วครับ";
-      el.style.color = "#ff4444";
+      anyExpired = true;
     } else {
       const h = Math.floor(remain / (1000 * 60 * 60)).toString().padStart(2, "0");
       const m = Math.floor((remain % (1000 * 60 * 60)) / (1000 * 60)).toString().padStart(2, "0");
@@ -70,6 +69,13 @@ function updatePromoCountdowns() {
       el.textContent = `⏰ โปรเหลือเวลา: ${h}:${m}:${s}`;
     }
   });
+  if (anyExpired) {
+    renderItems();
+    // อัปเดต modal ถ้าเปิดอยู่
+    if (currentItem && document.getElementById("itemModal").classList.contains("active")) {
+      openItemModal(currentItem.id);
+    }
+  }
 }
 
 // State
