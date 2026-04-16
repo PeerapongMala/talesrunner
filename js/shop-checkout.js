@@ -497,12 +497,8 @@ function notifyDiscord(fb, charName, cartItems, entries) {
     const payload = JSON.stringify({ embeds: [embed] });
     const sendWebhook = (url) => {
       if (!url) return;
-      try {
-        const blob = new Blob([payload], { type: 'application/json' });
-        navigator.sendBeacon(url, blob);
-      } catch (_) {
-        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }).catch(() => {});
-      }
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload })
+        .catch(err => console.warn('Discord webhook failed:', err));
     };
 
     // Owner: ส่งทันที
