@@ -704,7 +704,10 @@ function renderAdminStockToggles() {
         const name = e.target.dataset.adminToggle;
         const enabling = e.target.checked;
         e.target.disabled = true;
-        toggleAdminStock(name, enabling).finally(() => { e.target.disabled = false; });
+        const item = e.target.closest('.admin-stock-toggle-item');
+        toggleAdminStock(name, enabling).then((result) => {
+          if (result !== 'cancelled' && item) item.classList.toggle('disabled', !enabling);
+        }).finally(() => { e.target.disabled = false; });
       });
     });
 
@@ -820,7 +823,7 @@ async function _doToggleAdminStock(adminName, enabling) {
       // revert toggle กลับเป็น "เปิด" เพราะไม่ได้ปิดจริง
       const cb = document.querySelector(`[data-admin-toggle="${adminName}"]`);
       if (cb) cb.checked = true;
-      return;
+      return 'cancelled';
     }
 
     const savedAmounts = {};
