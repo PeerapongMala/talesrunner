@@ -218,6 +218,7 @@ function setupLogin() {
         if (typeof loadCommissionTiers === 'function') loadCommissionTiers();
         if (typeof setupCommissionTiers === 'function') setupCommissionTiers();
         if (typeof loadPendingActions === 'function') loadPendingActions();
+        if (typeof loadDiscordSettings === 'function') loadDiscordSettings();
       } catch (err) {
         // Permission Denied แปลว่าไม่ใช่แอดมิน
         console.warn('Not an admin:', err.message);

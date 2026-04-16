@@ -1147,3 +1147,82 @@ function setupCommissionTiers() {
   });
 }
 
+// ============ DISCORD WEBHOOK SETTINGS ============
+function loadDiscordSettings() {
+  db.collection('settings').doc('discord').get().then(doc => {
+    if (doc.exists) {
+      const data = doc.data();
+      const ownerInput = document.getElementById('discordOwnerInput');
+      const publicInput = document.getElementById('discordPublicInput');
+      if (ownerInput) ownerInput.value = data.webhookOwner || '';
+      if (publicInput) publicInput.value = data.webhookPublic || '';
+    }
+  }).catch(() => {});
+
+  const saveBtn = document.getElementById('saveDiscordBtn');
+  const testBtn = document.getElementById('testDiscordBtn');
+  if (!saveBtn) return;
+
+  saveBtn.addEventListener('click', async () => {
+    const ownerUrl = (document.getElementById('discordOwnerInput').value || '').trim();
+    const publicUrl = (document.getElementById('discordPublicInput').value || '').trim();
+    const errEl = document.getElementById('discordSettingError');
+
+    for (const url of [ownerUrl, publicUrl]) {
+      if (url && !url.startsWith('https://discord.com/api/webhooks/')) {
+        errEl.textContent = 'URL ต้องขึ้นต้นด้วย https://discord.com/api/webhooks/';
+        return;
+      }
+    }
+    errEl.textContent = '';
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'กำลังบันทึก...';
+    try {
+      await db.collection('settings').doc('discord').set({
+        webhookOwner: ownerUrl || null,
+        webhookPublic: publicUrl || null
+      });
+      showToast('บันทึก Discord Webhook แล้ว');
+    } catch (e) {
+      showAlert('บันทึกไม่ได้: ' + e.message, 'ผิดพลาด');
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'บันทึก';
+    }
+  });
+
+  testBtn.addEventListener('click', async () => {
+    const ownerUrl = (document.getElementById('discordOwnerInput').value || '').trim();
+    if (!ownerUrl) {
+      showAlert('ยังไม่ได้ใส่ Webhook URL', 'ทดสอบ Discord');
+      return;
+    }
+    testBtn.disabled = true;
+    testBtn.textContent = 'กำลังส่ง...';
+    try {
+      const embed = {
+        title: '🔔 ทดสอบแจ้งเตือน',
+        description: 'ถ้าเห็นข้อความนี้ แสดงว่า Webhook ใช้งานได้!',
+        color: 0x4CAF50,
+        timestamp: new Date().toISOString()
+      };
+      const res = await fetch(ownerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ embeds: [embed] })
+      });
+      if (res.ok || res.status === 204) {
+        showToast('ส่งทดสอบสำเร็จ! เช็ค Discord');
+      } else {
+        const text = await res.text().catch(() => '');
+        showAlert(`Discord ตอบ ${res.status}: ${text}`, 'ทดสอบล้มเหลว');
+      }
+    } catch (e) {
+      showAlert('ส่งไม่ได้: ' + e.message, 'ทดสอบล้มเหลว');
+    } finally {
+      testBtn.disabled = false;
+      testBtn.textContent = '🔔 ทดสอบ';
+    }
+  });
+}

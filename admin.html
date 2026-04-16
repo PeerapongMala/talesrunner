@@ -178,6 +178,7 @@
             <button class="sub-tab owner-only" data-settab="promptpay">พร้อมเพย์</button>
             <button class="sub-tab owner-only" data-settab="admins">แอดมิน</button>
             <button class="sub-tab owner-only" data-settab="commission">ค่า Com</button>
+            <button class="sub-tab owner-only" data-settab="discord">Discord</button>
           </div>
 
           <!-- BAN LIST -->
@@ -271,6 +272,31 @@
             <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
               <button class="btn-secondary" id="addTierBtn" style="width:auto;padding:8px 16px;">+ เพิ่มขั้น</button>
               <button class="btn-primary" id="saveTiersBtn" style="width:auto;padding:8px 24px;">บันทึก</button>
+            </div>
+          </div>
+
+          <!-- Discord Webhook (owner only) -->
+          <div class="settings-card settings-sub" id="discordCard">
+            <div class="coupon-section-header">
+              <div>
+                <h2 class="coupon-section-title">Discord Webhook</h2>
+                <p class="coupon-section-desc">แจ้งเตือน order ใหม่เข้า Discord อัตโนมัติ</p>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;margin-top:10px;">
+              <div>
+                <label style="font-size:13px;color:#ccc;margin-bottom:4px;display:block;">Webhook Owner (แจ้งทันที)</label>
+                <input type="text" id="discordOwnerInput" placeholder="https://discord.com/api/webhooks/..." class="pp-input" style="width:100%;" />
+              </div>
+              <div>
+                <label style="font-size:13px;color:#ccc;margin-bottom:4px;display:block;">Webhook Public (แจ้งหลัง 2 นาที)</label>
+                <input type="text" id="discordPublicInput" placeholder="https://discord.com/api/webhooks/..." class="pp-input" style="width:100%;" />
+              </div>
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+                <button class="btn-secondary" id="testDiscordBtn" style="width:auto;padding:8px 16px;">🔔 ทดสอบ</button>
+                <button class="btn-primary" id="saveDiscordBtn" style="width:auto;padding:8px 24px;">บันทึก</button>
+              </div>
+              <p class="field-error" id="discordSettingError"></p>
             </div>
           </div>
 
