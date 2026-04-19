@@ -123,6 +123,17 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ============ RATE LIMITS (fingerprint-based anti-spam) ============
+    match /rate_limits/{fp} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasOnly(['last', 'count'])
+                    && request.resource.data.last is timestamp
+                    && request.resource.data.count is number
+                    && request.resource.data.count >= 0
+                    && request.resource.data.count <= 10000;
+      allow delete: if isAdmin();
+    }
+
     // ============ RESERVATIONS (จองสินค้าในตะกร้า) ============
     match /reservations/{sessionId} {
       allow read: if true;
