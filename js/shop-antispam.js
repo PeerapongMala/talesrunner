@@ -17,9 +17,10 @@ function hasVowel(s) {
 }
 
 function maxConsonantRun(s) {
+  // นับเฉพาะ run ที่มีตัวอักษรต่างกัน ≥ 4 ตัว (กัน "nnnnnn" ถูกเหมาว่า random)
   const m = s.toLowerCase().match(/[bcdfghjklmnpqrstvwxz]+/g);
   if (!m) return 0;
-  return Math.max(...m.map(x => x.length));
+  return Math.max(...m.map(x => new Set(x).size >= 4 ? x.length : 0));
 }
 
 function maxRepeatChar(s) {
@@ -46,9 +47,9 @@ function hasKeyboardRun(s, minLen) {
 }
 
 function hasRepeatedChunk(s) {
-  // ตรวจ pattern ซ้ำ 3 รอบ เช่น abcabcabc, xyxyxy
+  // ตรวจ pattern ซ้ำ 3 รอบ เช่น abcabcabc (เริ่มที่ n=3 ไม่จับ "nn"/"bu" ที่เป็นชื่อจริง)
   const lower = s.toLowerCase().replace(/\s+/g, '');
-  for (let n = 2; n <= 4; n++) {
+  for (let n = 3; n <= 4; n++) {
     for (let i = 0; i + n * 3 <= lower.length; i++) {
       const chunk = lower.substring(i, i + n);
       if (lower.substring(i + n, i + 2 * n) === chunk &&
@@ -78,13 +79,15 @@ function hasPureRepeat(s) {
 
 function charDiversityLow(s) {
   // ใช้ตัวอักษรต่างกันน้อยเกินไปเมื่อเทียบกับความยาว = มั่ว
-  //   length ≥ 7  + unique ≤ 3   เช่น "asddsadas" (a,s,d), "yoyoyoyo" (y,o)
+  //   length ≥ 8  + unique ≤ 2   เช่น "yoyoyoyo" (y,o) แต่ "Bububuu" ที่ 7 ตัวยังผ่าน
+  //   length ≥ 9  + unique ≤ 3   เช่น "asddsadas" (a,s,d)
   //   length ≥ 12 + unique ≤ 4   เช่น "dasdasdsadd" (d,a,s)
-  //   length ≥ 15 + unique ≤ 5   เช่น "asdfoasdfasfsafsafsa" (a,s,d,f,o)
+  //   length ≥ 15 + unique ≤ 5   เช่น "asdfoasdfasfsafsafsa"
   const letters = s.toLowerCase().replace(/[^a-z]/g, '');
-  if (letters.length < 7) return false;
+  if (letters.length < 8) return false;
   const uniq = new Set(letters).size;
-  if (uniq <= 3) return true;
+  if (uniq <= 2) return true;
+  if (letters.length >= 9 && uniq <= 3) return true;
   if (letters.length >= 12 && uniq <= 4) return true;
   if (letters.length >= 15 && uniq <= 5) return true;
   return false;
@@ -102,12 +105,11 @@ function looksLikeGibberish(text) {
   const letters = t.replace(/[^a-zA-Z]/g, '');
   if (letters.length < 5) return false; // ชื่อที่มีอักษรน้อย (เบอร์เยอะ) ผ่าน
 
-  if (!hasVowel(letters)) return true;              // ไม่มีสระเลย
-  if (maxConsonantRun(letters) >= 6) return true;   // consonant 6 ตัวติด
-  if (maxRepeatChar(letters) >= 5) return true;     // ตัวเดียวซ้ำ 5+
+  if (letters.length >= 7 && !hasVowel(letters)) return true;  // ยาว 7+ ไม่มีสระ
+  if (maxConsonantRun(letters) >= 7) return true;   // consonant run 7+ (unique ≥ 4)
+  if (maxRepeatChar(letters) >= 7) return true;     // ตัวเดียวซ้ำ 7+
   if (hasKeyboardRun(letters, 5)) return true;      // keyboard row 5+
   if (hasRepeatedChunk(letters)) return true;       // chunk ซ้ำ 3 รอบ
-  if (hasPureRepeat(letters)) return true;          // chunk ซ้ำ 2 รอบ cover ≥ 80%
   if (charDiversityLow(letters)) return true;       // ตัวอักษรต่างกันน้อย
 
   return false;
