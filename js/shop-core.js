@@ -2,11 +2,7 @@
 // BubbleShop - Frontend Logic
 // ============================================
 
-// Helpers
-function formatPrice(v) {
-  const n = Number(v) || 0;
-  return n % 1 === 0 ? n.toString() : n.toFixed(2);
-}
+// Helpers — formatPrice() + escapeHtml() live in js/modal-alert.js (shared)
 function isPromoValid(item) {
   if (item.promoPrice == null) return false;
   if (item.promoExpiresAt && Date.now() < item.promoExpiresAt.toMillis()) {

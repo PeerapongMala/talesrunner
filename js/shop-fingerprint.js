@@ -1,6 +1,6 @@
-
 // ============================================================
-// ANTI-SPAM LAYER 2: Device fingerprint rate limit (Firestore)
+// Device fingerprint rate limit — 30s cooldown + 5/hour per device
+// Complements Firebase App Check (reCAPTCHA v3) at the request level
 // ============================================================
 
 const FP_COOLDOWN_MS = 30 * 1000;      // 30s ระหว่างออเดอร์ต่อเครื่อง

@@ -18,7 +18,7 @@ const stockAccum = {}; // { itemId: { total, timer } }
 let isOwner = false;
 let isExternal = false;
 
-function formatPrice(v) { const n = Number(v) || 0; return n % 1 === 0 ? n.toString() : n.toFixed(2); }
+// formatPrice() + escapeHtml() live in js/modal-alert.js (shared)
 
 const MAX_IMAGE_SIZE = 500 * 1024; // 500KB (base64 ~680KB, safe for Firestore 1MB limit)
 
