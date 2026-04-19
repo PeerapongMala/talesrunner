@@ -46,6 +46,29 @@ function hasKeyboardRun(s, minLen) {
   return false;
 }
 
+// Map ของตัวอักษรที่อยู่ติดกันบน QWERTY keyboard (ทั้งซ้ายขวา-บนล่าง)
+const KB_ADJACENT = {
+  q:'wa',    w:'qesa',   e:'wrsd',   r:'etdf',   t:'ryfg',
+  y:'tugh',  u:'yihj',   i:'uojk',   o:'ipkl',   p:'ol',
+  a:'qwszx', s:'weadzxc',d:'erscxv', f:'rtdcvb', g:'tyfvbn',
+  h:'yugbnm',j:'uihnm',  k:'iojm',   l:'opk',
+  z:'asx',   x:'zsdc',   c:'xdvf',   v:'cfgb',   b:'vgnh',
+  n:'bhmj',  m:'nj'
+};
+
+function keyboardAdjacencyRatio(s) {
+  const lower = s.toLowerCase().replace(/[^a-z]/g, '');
+  if (lower.length < 4) return 0;
+  let adjacent = 0, total = 0;
+  for (let i = 1; i < lower.length; i++) {
+    const prev = lower[i - 1], curr = lower[i];
+    if (prev === curr) continue; // ข้ามตัวซ้ำ
+    total++;
+    if (KB_ADJACENT[prev] && KB_ADJACENT[prev].includes(curr)) adjacent++;
+  }
+  return total === 0 ? 0 : adjacent / total;
+}
+
 function hasRepeatedChunk(s) {
   // ตรวจ pattern ซ้ำ 3 รอบ เช่น abcabcabc (เริ่มที่ n=3 ไม่จับ "nn"/"bu" ที่เป็นชื่อจริง)
   const lower = s.toLowerCase().replace(/\s+/g, '');
@@ -102,6 +125,9 @@ function looksLikeGibberish(text) {
   if (hasThai(t)) return false;         // ชื่อไทย ผ่าน
   if (t.length < 5) return false;       // "Bob", "Kim" ผ่าน
 
+  // อักขระพิเศษที่ไม่พบในชื่อจริง (@, #, $, %, ^, &, *, + ฯลฯ) = มั่ว
+  if (/[@#$%^&*+={}<>\/\\|~`]/.test(t)) return true;
+
   const letters = t.replace(/[^a-zA-Z]/g, '');
   if (letters.length < 5) return false; // ชื่อที่มีอักษรน้อย (เบอร์เยอะ) ผ่าน
 
@@ -111,6 +137,11 @@ function looksLikeGibberish(text) {
   if (hasKeyboardRun(letters, 5)) return true;      // keyboard row 5+
   if (hasRepeatedChunk(letters)) return true;       // chunk ซ้ำ 3 รอบ
   if (charDiversityLow(letters)) return true;       // ตัวอักษรต่างกันน้อย
+
+  // Keyboard mashing: คู่ตัวอักษรติดกันบน keyboard ≥ 50% = น่าจะกดมั่ว
+  // ใช้ตั้งแต่ length ≥ 10 เพื่อไม่กระทบชื่อไทยสั้นๆ ที่มี "sa","wa" (home row)
+  // จับ "peeasdaszcxzesazdx" (62%), "dasdsafeasd" (60%)
+  if (letters.length >= 10 && keyboardAdjacencyRatio(t) >= 0.50) return true;
 
   return false;
 }
