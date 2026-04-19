@@ -60,16 +60,16 @@ function hasRepeatedChunk(s) {
   return false;
 }
 
-function hasRepeatedChunk2x(s) {
-  // ตรวจ chunk 3-5 ตัวซ้ำ 2 รอบติดกัน เช่น "dasdas" (das+das) ใน dasdasdsadd
-  // ใช้เฉพาะข้อความยาว ≥ 8 ตัว (กัน false pos กับชื่อสั้น)
+function hasPureRepeat(s) {
+  // ตรวจ chunk 2-5 ตัวซ้ำ 2 รอบติดกัน โดยส่วนที่ซ้ำต้อง cover ≥ 80% ของข้อความ
+  // จับ "asdasd" (100%), "abcabc" (100%) แต่ไม่จับ "tonnamnamtip" (namnam = 50%)
   const lower = s.toLowerCase().replace(/[^a-z]/g, '');
-  if (lower.length < 8) return false;
-  for (let n = 3; n <= 5; n++) {
+  if (lower.length < 6) return false;
+  for (let n = 2; n <= 5; n++) {
     for (let i = 0; i + n * 2 <= lower.length; i++) {
       const chunk = lower.substring(i, i + n);
       if (lower.substring(i + n, i + 2 * n) === chunk) {
-        return true;
+        if ((2 * n) / lower.length >= 0.8) return true;
       }
     }
   }
@@ -77,14 +77,16 @@ function hasRepeatedChunk2x(s) {
 }
 
 function charDiversityLow(s) {
-  // ข้อความยาว ≥ 7 ตัว แต่ใช้ตัวอักษรต่างกันแค่ ≤ 3 = มั่ว
-  // เช่น "asddsadas" (a,s,d), "dasdasdsadd" (a,s,d), "yoyoyoyo" (y,o)
+  // ใช้ตัวอักษรต่างกันน้อยเกินไปเมื่อเทียบกับความยาว = มั่ว
+  //   length ≥ 7  + unique ≤ 3   เช่น "asddsadas" (a,s,d), "yoyoyoyo" (y,o)
+  //   length ≥ 12 + unique ≤ 4   เช่น "dasdasdsadd" (d,a,s)
+  //   length ≥ 15 + unique ≤ 5   เช่น "asdfoasdfasfsafsafsa" (a,s,d,f,o)
   const letters = s.toLowerCase().replace(/[^a-z]/g, '');
   if (letters.length < 7) return false;
   const uniq = new Set(letters).size;
   if (uniq <= 3) return true;
-  // ยาวมากๆ (≥ 12) ใช้ตัวต่างกัน ≤ 4 ก็ยังถือว่ามั่ว
   if (letters.length >= 12 && uniq <= 4) return true;
+  if (letters.length >= 15 && uniq <= 5) return true;
   return false;
 }
 
@@ -105,7 +107,7 @@ function looksLikeGibberish(text) {
   if (maxRepeatChar(letters) >= 5) return true;     // ตัวเดียวซ้ำ 5+
   if (hasKeyboardRun(letters, 5)) return true;      // keyboard row 5+
   if (hasRepeatedChunk(letters)) return true;       // chunk ซ้ำ 3 รอบ
-  if (hasRepeatedChunk2x(letters)) return true;     // chunk 3-5 ตัวซ้ำ 2 รอบติดกัน
+  if (hasPureRepeat(letters)) return true;          // chunk ซ้ำ 2 รอบ cover ≥ 80%
   if (charDiversityLow(letters)) return true;       // ตัวอักษรต่างกันน้อย
 
   return false;
