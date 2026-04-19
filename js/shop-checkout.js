@@ -198,6 +198,9 @@ async function submitOrder() {
   } else if (blockedNames.includes(fb.toLowerCase())) {
     showFieldError("inputFbError", "Facebook นี้ถูกระงับการสั่งซื้อ");
     hasError = true;
+  } else if (typeof looksLikeGibberish === 'function' && looksLikeGibberish(fb)) {
+    showFieldError("inputFbError", "กรุณากรอกชื่อ Facebook ที่ถูกต้อง (ถ้าบล็อกผิดพลาด ทัก FB ร้านได้เลย)");
+    hasError = true;
   }
   if (!charName) {
     showFieldError("inputCharNameError", "กรุณากรอกชื่อตัวละคร");
@@ -210,6 +213,9 @@ async function submitOrder() {
     hasError = true;
   } else if (charName.length > 100) {
     showFieldError("inputCharNameError", "ยาวเกินไป (ไม่เกิน 100 ตัวอักษร)");
+    hasError = true;
+  } else if (typeof looksLikeGibberish === 'function' && looksLikeGibberish(charName)) {
+    showFieldError("inputCharNameError", "กรุณากรอกชื่อตัวละครที่ถูกต้อง (ถ้าบล็อกผิดพลาด ทัก FB ร้านได้เลย)");
     hasError = true;
   }
   if (!document.getElementById("confirmCheckbox").checked) {
@@ -225,6 +231,17 @@ async function submitOrder() {
   const confirmBtn = document.getElementById("summaryConfirm");
   confirmBtn.disabled = true;
   confirmBtn.textContent = "กำลังตรวจสอบ...";
+
+  // Fingerprint-based rate limit (Firestore) — กัน spam ที่เคลียร์ localStorage
+  if (typeof checkFingerprintLimit === 'function') {
+    const fpCheck = await checkFingerprintLimit();
+    if (fpCheck.blocked) {
+      showAlert(fpCheck.reason, 'กรุณารอสักครู่');
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "ยืนยันสั่งซื้อ";
+      return;
+    }
+  }
 
   try {
     // เช็คว่ามี order pending อยู่แล้วมั้ย (best-effort)
@@ -397,6 +414,11 @@ async function submitOrder() {
     localStorage.setItem("lastOrderTime", Date.now().toString());
     localStorage.setItem("savedFb", fb);
     localStorage.setItem("savedCharName", charName);
+
+    // บันทึก rate-limit ต่อเครื่อง (Firestore) — fire-and-forget
+    if (typeof recordFingerprintOrder === 'function') {
+      recordFingerprintOrder();
+    }
 
     // แจ้งเตือน Discord
     notifyDiscord(fb, charName, cartItems, entries);
