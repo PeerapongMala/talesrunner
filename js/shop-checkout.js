@@ -198,9 +198,6 @@ async function submitOrder() {
   } else if (blockedNames.includes(fb.toLowerCase())) {
     showFieldError("inputFbError", "Facebook นี้ถูกระงับการสั่งซื้อ");
     hasError = true;
-  } else if (typeof looksLikeGibberish === 'function' && looksLikeGibberish(fb)) {
-    showFieldError("inputFbError", "ระบบไม่สามารถยืนยันชื่อนี้ได้ ถ้าเป็นชื่อจริงของคุณ รบกวนทัก FB ร้านเพื่อสั่งซื้อครับ");
-    hasError = true;
   }
   if (!charName) {
     showFieldError("inputCharNameError", "กรุณากรอกชื่อตัวละคร");
@@ -213,9 +210,6 @@ async function submitOrder() {
     hasError = true;
   } else if (charName.length > 100) {
     showFieldError("inputCharNameError", "ยาวเกินไป (ไม่เกิน 100 ตัวอักษร)");
-    hasError = true;
-  } else if (typeof looksLikeGibberish === 'function' && looksLikeGibberish(charName)) {
-    showFieldError("inputCharNameError", "ระบบไม่สามารถยืนยันชื่อตัวละครนี้ได้ ถ้าเป็นชื่อจริง รบกวนทัก FB ร้านเพื่อสั่งซื้อครับ");
     hasError = true;
   }
   if (!document.getElementById("confirmCheckbox").checked) {
