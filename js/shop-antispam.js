@@ -60,6 +60,34 @@ function hasRepeatedChunk(s) {
   return false;
 }
 
+function hasRepeatedChunk2x(s) {
+  // ตรวจ chunk 3-5 ตัวซ้ำ 2 รอบติดกัน เช่น "dasdas" (das+das) ใน dasdasdsadd
+  // ใช้เฉพาะข้อความยาว ≥ 8 ตัว (กัน false pos กับชื่อสั้น)
+  const lower = s.toLowerCase().replace(/[^a-z]/g, '');
+  if (lower.length < 8) return false;
+  for (let n = 3; n <= 5; n++) {
+    for (let i = 0; i + n * 2 <= lower.length; i++) {
+      const chunk = lower.substring(i, i + n);
+      if (lower.substring(i + n, i + 2 * n) === chunk) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function charDiversityLow(s) {
+  // ข้อความยาว ≥ 7 ตัว แต่ใช้ตัวอักษรต่างกันแค่ ≤ 3 = มั่ว
+  // เช่น "asddsadas" (a,s,d), "dasdasdsadd" (a,s,d), "yoyoyoyo" (y,o)
+  const letters = s.toLowerCase().replace(/[^a-z]/g, '');
+  if (letters.length < 7) return false;
+  const uniq = new Set(letters).size;
+  if (uniq <= 3) return true;
+  // ยาวมากๆ (≥ 12) ใช้ตัวต่างกัน ≤ 4 ก็ยังถือว่ามั่ว
+  if (letters.length >= 12 && uniq <= 4) return true;
+  return false;
+}
+
 // Return true ถ้าข้อความดู "พิมพ์มั่ว"
 // กฎเซฟ: ชื่อไทย / ชื่อสั้น <5 ตัว ถือว่าไม่มั่วเสมอ
 function looksLikeGibberish(text) {
@@ -77,6 +105,8 @@ function looksLikeGibberish(text) {
   if (maxRepeatChar(letters) >= 5) return true;     // ตัวเดียวซ้ำ 5+
   if (hasKeyboardRun(letters, 5)) return true;      // keyboard row 5+
   if (hasRepeatedChunk(letters)) return true;       // chunk ซ้ำ 3 รอบ
+  if (hasRepeatedChunk2x(letters)) return true;     // chunk 3-5 ตัวซ้ำ 2 รอบติดกัน
+  if (charDiversityLow(letters)) return true;       // ตัวอักษรต่างกันน้อย
 
   return false;
 }
