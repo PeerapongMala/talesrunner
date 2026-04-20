@@ -82,17 +82,17 @@ function processProductSnapshot(snapshot) {
     }
 
     // แยกไอเทมที่เปิดอยู่ vs คลังเก็บ (ปิดอยู่)
-    const activeProducts = allProducts.filter(item => item.active !== false);
-    const archivedProducts = allProducts.filter(item => item.active === false);
-
-    // External admin → แบ่ง 2 กลุ่ม: แชร์กับคุณ / ไม่แชร์
-    let sharedProducts, notSharedProducts = [];
-    if (isExternal) {
-      sharedProducts = activeProducts.filter(item => isMyProduct(item));
-      notSharedProducts = activeProducts.filter(item => !isMyProduct(item));
-    } else {
-      sharedProducts = activeProducts;
+    // Owner เห็นทั้งหมด | Non-owner (admin/external) เห็นเฉพาะของตัวเอง
+    let activeProducts = allProducts.filter(item => item.active !== false);
+    let archivedProducts = allProducts.filter(item => item.active === false);
+    if (!isOwner) {
+      activeProducts = activeProducts.filter(item => isMyProduct(item));
+      archivedProducts = archivedProducts.filter(item => isMyProduct(item));
     }
+
+    // notSharedProducts คงโครงสร้างไว้เผื่อ render header (จะเว้นเป็นลิสต์ว่างสำหรับ non-owner)
+    const sharedProducts = activeProducts;
+    const notSharedProducts = [];
 
     // Pagination (เฉพาะ sharedProducts)
     const totalPages = Math.max(1, Math.ceil(sharedProducts.length / PRODUCTS_PER_PAGE));
