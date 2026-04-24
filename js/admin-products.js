@@ -7,15 +7,13 @@ let showArchive = false; // toggle คลังเก็บ
 // ============ HELPER: เช็คว่าสินค้าเป็นของ admin คนนี้ ============
 function isMyProduct(item) {
   if (!currentAdminName) return false;
-  // 1) owner แชร์ให้ external เห็น
   if (item.sharedWithExternal) return true;
-  // 2) ตัวเองมี adminStock > 0 หรือ adminClosedStock > 0 (ปิด stock ตัวเองไว้)
   const aliases = typeof getAdminAliases === 'function' ? getAdminAliases(currentAdminName) : [currentAdminName];
   const adminStockMap = item.adminStock || {};
   const closedMap = item.adminClosedStock || {};
   for (const alias of aliases) {
-    if (getAdminStockValue(adminStockMap, alias) > 0) return true;
-    if ((Number(closedMap[alias]) || 0) > 0) return true;
+    if (adminStockMap[alias] !== undefined) return true;
+    if (closedMap[alias] !== undefined) return true;
   }
   return false;
 }
