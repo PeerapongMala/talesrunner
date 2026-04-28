@@ -5,13 +5,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --bg-darkest: var(--bg-darkest);
-  --bg-dark: var(--bg-dark);
-  --bg-medium: var(--bg-medium);
-  --primary: var(--primary);
-  --primary-light: var(--primary-light);
+  --bg-darkest: #1a0533;
+  --bg-dark: #2d1b69;
+  --bg-medium: #4a1a6b;
+  --primary: #6b2fa0;
+  --primary-light: #9b4dca;
   --primary-light-rgb: 155, 77, 202;
-  --accent: var(--accent);
+  --accent: #ff69b4;
   --accent-rgb: 255, 105, 180;
 }
 
