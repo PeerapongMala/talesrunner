@@ -701,9 +701,11 @@ async function recalculateRevenue() {
     showToast('กำลังโหลด orders...');
     const snapshot = await db.collection('orders').get();
     const completedOrders = [];
+    const gameFilter = typeof currentGameFilter !== 'undefined' ? currentGameFilter : 'talesrunner';
     snapshot.forEach(doc => {
       const order = doc.data();
       if (order.status !== 'completed') return;
+      if ((order.game || 'talesrunner') !== gameFilter) return;
       completedOrders.push({ id: doc.id, ...order });
     });
 

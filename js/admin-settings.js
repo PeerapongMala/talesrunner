@@ -29,12 +29,18 @@ function loadAdminRoles() {
       const toggleRoleBtn = (isOwner && role !== 'owner')
         ? `<button class="btn-table secondary" style="font-size:11px;padding:3px 8px;" data-action="toggleRole" data-uid="${doc.id}" data-role="${role}">${role === 'external' ? 'เป็น Admin' : 'เป็นภายนอก'}</button>`
         : '';
+      const adminGames = Array.isArray(d.games) && d.games.length > 0 ? d.games : [];
+      const gamesLabel = role === 'owner' ? 'ทุกเกม' : (adminGames.length > 0 ? adminGames.map(g => g === 'talesrunner' ? 'TR' : g.toUpperCase()).join(', ') : 'TR');
+      const gamesBtn = (isOwner && role !== 'owner')
+        ? `<button class="btn-table secondary" style="font-size:10px;padding:2px 6px;color:#4fc3f7;border-color:#4fc3f7;" data-action="manageGames" data-uid="${doc.id}" data-name="${escapeHtml(displayName)}" data-games="${escapeHtml(adminGames.join(','))}">${gamesLabel}</button>`
+        : `<span style="font-size:11px;color:#aaa;">${gamesLabel}</span>`;
       return `<tr>
         <td style="word-break: break-all;">${escapeHtml(d.email || doc.id)} ${roleLabel}</td>
         <td style="word-break: break-all;">${escapeHtml(d.name || '-')}</td>
         <td style="word-break: break-all;">
           <span style="color:#ff69b4;font-weight:600;">${escapeHtml(displayName)}</span>
           ${editBtn}
+          <div style="margin-top:3px;">${gamesBtn}</div>
         </td>
         <td style="text-align: center; white-space: nowrap;">
           ${role === 'owner' ? '<span style="color:#aaa;font-size:12px;">-</span>' : `${toggleRoleBtn} <button class="btn-table danger" data-action="removeAdmin" data-uid="${doc.id}">ลบสิทธิ์</button>`}
@@ -83,12 +89,16 @@ async function approveAdminRole(uid, email) {
   const displayName = await askDisplayName('ตั้งชื่อแสดงผล', 'ตั้งชื่อให้แอดมิน ' + email, rawName);
   if (!displayName) return;
 
+  const games = await pickAdminGames(displayName);
+  if (!games) return;
+
   try {
     await db.collection('admin_users').doc(uid).set({
       email: email,
       name: rawName,
       displayName: displayName,
       role: role,
+      games: games,
       grantedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await db.collection('pending_users').doc(uid).delete();
@@ -202,6 +212,62 @@ async function editAdminDisplayName(uid, currentName) {
   } catch (e) { showAlert('แก้ชื่อไม่ได้: ' + e.message, 'ผิดพลาด'); }
 }
 
+const ALL_GAMES = [
+  { id: 'talesrunner', label: 'TalesRunner' },
+  { id: 'nte', label: 'NTE (Neverness to Everness)' }
+];
+
+function pickAdminGames(displayName, preselect) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('adminGamesModal');
+    const nameEl = document.getElementById('adminGamesName');
+    const container = document.getElementById('adminGamesCheckboxes');
+    const confirmBtn = document.getElementById('confirmAdminGamesBtn');
+    const cancelBtn = document.getElementById('cancelAdminGamesBtn');
+
+    const pre = preselect || ['talesrunner'];
+    nameEl.textContent = displayName;
+    container.innerHTML = ALL_GAMES.map(g => {
+      const checked = pre.includes(g.id) ? 'checked' : '';
+      return `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;background:rgba(255,255,255,0.05);border-radius:8px;border:1px solid rgba(255,255,255,0.1);">
+        <input type="checkbox" class="admin-game-cb" value="${g.id}" ${checked} style="width:18px;height:18px;accent-color:var(--primary-light, #9b4dca);">
+        <span style="font-size:14px;font-weight:500;">${g.label}</span>
+      </label>`;
+    }).join('');
+    modal.classList.add('active');
+
+    function cleanup() {
+      modal.classList.remove('active');
+      confirmBtn.removeEventListener('click', onConfirm);
+      cancelBtn.removeEventListener('click', onCancel);
+    }
+    function onConfirm() {
+      const selected = [];
+      container.querySelectorAll('.admin-game-cb:checked').forEach(cb => selected.push(cb.value));
+      if (selected.length === 0) {
+        showAlert('กรุณาเลือกอย่างน้อย 1 เกม', 'ผิดพลาด');
+        return;
+      }
+      cleanup();
+      resolve(selected);
+    }
+    function onCancel() { cleanup(); resolve(null); }
+
+    confirmBtn.addEventListener('click', onConfirm);
+    cancelBtn.addEventListener('click', onCancel);
+  });
+}
+
+async function openAdminGamesModal(uid, displayName, gamesStr) {
+  const currentGames = gamesStr ? gamesStr.split(',').filter(Boolean) : ['talesrunner'];
+  const selected = await pickAdminGames(displayName, currentGames);
+  if (!selected) return;
+  try {
+    await db.collection('admin_users').doc(uid).update({ games: selected });
+    showToast(`อัปเดตเกมของ "${displayName}" แล้ว: ${selected.map(g => g === 'talesrunner' ? 'TR' : g.toUpperCase()).join(', ')}`);
+  } catch (e) { showAlert('อัปเดตไม่ได้: ' + e.message, 'ผิดพลาด'); }
+}
+
 async function viewSlip(orderId) {
   const order = loadedOrdersCache[orderId];
   if (!order) return;
@@ -240,6 +306,7 @@ document.addEventListener('click', (e) => {
   else if (action === 'rejectAdmin') rejectPendingAdmin(uid);
   else if (action === 'toggleRole') toggleAdminRole(uid, btn.dataset.role);
   else if (action === 'editDisplayName') editAdminDisplayName(uid, btn.dataset.current);
+  else if (action === 'manageGames') openAdminGamesModal(uid, btn.dataset.name, btn.dataset.games);
   else if (action === 'viewSlip') viewSlip(id);
   else if (action === 'toggleCoupon') toggleCouponStatus(id, btn.dataset.active === 'true');
   else if (action === 'deleteCoupon') deleteCoupon(id);
@@ -396,6 +463,15 @@ function processOrderSnapshot(snapshot, board) {
     seenIds.add(doc.id);
     return true;
   });
+
+  // กรองตามเกมที่เลือก (global filter)
+  if (typeof currentGameFilter !== 'undefined' && currentGameFilter) {
+    docs = docs.filter(doc => {
+      const data = doc.data();
+      return (data.game || 'talesrunner') === currentGameFilter;
+    });
+  }
+
   let delayedCount = 0;
   let nearestRevealMs = Infinity; // เวลาที่ order ถัดไปจะโผล่
   if (isExternal && typeof isMyProduct === 'function') {

@@ -2400,11 +2400,28 @@ async function rejectPendingAction(actionId) {
 function setupGameFilter() {
   const sel = document.getElementById('gameFilter');
   if (!sel) return;
+  // จำกัด dropdown ตามเกมที่แอดมินมีสิทธิ์
+  if (typeof currentAdminGames !== 'undefined' && currentAdminGames && Array.isArray(currentAdminGames)) {
+    Array.from(sel.options).forEach(opt => {
+      if (!currentAdminGames.includes(opt.value)) opt.style.display = 'none';
+    });
+    if (!currentAdminGames.includes(currentGameFilter)) {
+      currentGameFilter = currentAdminGames[0] || 'talesrunner';
+    }
+  }
   sel.value = currentGameFilter;
   sel.addEventListener('change', () => {
     currentGameFilter = sel.value;
     productPage = 1;
     if (_lastProductSnapshot) processProductSnapshot(_lastProductSnapshot);
+    // re-render orders ตามเกมที่เลือก
+    if (typeof _lastPendingSnapshot !== 'undefined' && _lastPendingSnapshot) {
+      const board = document.getElementById('orderBoard');
+      if (board && typeof processOrderSnapshot === 'function') {
+        const combined = { docs: [..._lastPendingSnapshot, ...(_completedOrders || [])] };
+        processOrderSnapshot(combined, board);
+      }
+    }
   });
 }
 

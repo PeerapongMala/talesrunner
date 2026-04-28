@@ -101,6 +101,23 @@ body {
   white-space: nowrap;
 }
 
+.game-filter-global {
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-family: 'Kanit', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.game-filter-global option {
+  background: #2d1b69;
+  color: #fff;
+}
+
 /* ============ RIGHT COLUMN ============ */
 .right-column {
   width: 380px;

@@ -17,6 +17,7 @@ const stockAccum = {}; // { itemId: { total, timer } }
 
 let isOwner = false;
 let isExternal = false;
+let currentAdminGames = null; // null = all games (owner), array = limited
 
 // formatPrice() + escapeHtml() live in js/modal-alert.js (shared)
 
@@ -160,6 +161,7 @@ function setupLogin() {
 
         isOwner = adminData && adminData.role === 'owner';
         isExternal = adminData && adminData.role === 'external';
+        currentAdminGames = isOwner ? null : (adminData && Array.isArray(adminData.games) && adminData.games.length > 0 ? adminData.games : ['talesrunner']);
 
         // ลบจาก pending ถ้าค้างอยู่
         try { await db.collection('pending_users').doc(user.uid).delete(); } catch(e) {}
@@ -377,7 +379,7 @@ function clearFieldErrors() {
 function setupEscapeKey() {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    const modals = ['pickRoleModal', 'renameCategoryModal', 'bulkAssignModal', 'categoryModal', 'addProductModal', 'addStockModal', 'stockHistoryModal', 'editProductModal', 'addCouponModal', 'shopStateModal', 'closeReasonModal', 'slipModal', 'editDisplayNameModal', 'cancelReasonModal', 'alertModal'];
+    const modals = ['pickRoleModal', 'renameCategoryModal', 'bulkAssignModal', 'categoryModal', 'addProductModal', 'addStockModal', 'stockHistoryModal', 'editProductModal', 'addCouponModal', 'shopStateModal', 'closeReasonModal', 'slipModal', 'editDisplayNameModal', 'cancelReasonModal', 'adminGamesModal', 'alertModal'];
     for (const id of modals) {
       const el = document.getElementById(id);
       if (el && el.classList.contains('active')) {

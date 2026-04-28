@@ -49,6 +49,10 @@
       <!-- HEADER -->
       <header class="header">
         <h1>BubbleShop - ADMIN</h1>
+        <select id="gameFilter" class="game-filter-global">
+          <option value="talesrunner">TalesRunner</option>
+          <option value="nte">NTE</option>
+        </select>
         <div class="visitor-badge visitor-badge-admin" id="visitorBadge">👀 วันนี้ <span id="visitorTodayCount">0</span> · ทั้งหมด <span id="visitorTotalCount">0</span></div>
         <div class="admin-header-actions">
           <div class="quota-info quota-ok" id="quotaInfo">
@@ -100,10 +104,6 @@
           >
             <h2>สินค้าทั้งหมด</h2>
             <div style="display:flex;gap:8px;align-items:center;">
-              <select id="gameFilter" style="padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:#fff;font-size:13px;">
-                <option value="talesrunner">TalesRunner</option>
-                <option value="nte">NTE</option>
-              </select>
               <button class="btn-secondary" id="manageCategoriesBtn" style="width:auto;margin:0;padding:10px 18px;font-size:13px;">หมวดหมู่</button>
               <button
                 class="btn-primary"
@@ -742,6 +742,19 @@
         <div class="modal-buttons">
           <button class="btn-secondary" id="cancelDisplayNameBtn">ยกเลิก</button>
           <button class="btn-primary" id="confirmDisplayNameBtn">บันทึก</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADMIN GAMES MODAL -->
+    <div class="modal-overlay" id="adminGamesModal">
+      <div class="modal" style="max-width: 380px;">
+        <h2>จัดการเกม</h2>
+        <p id="adminGamesName" style="text-align:center;color:#ff69b4;font-weight:600;margin-bottom:15px;"></p>
+        <div id="adminGamesCheckboxes" style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;"></div>
+        <div class="modal-buttons">
+          <button class="btn-secondary" id="cancelAdminGamesBtn">ยกเลิก</button>
+          <button class="btn-primary" id="confirmAdminGamesBtn">บันทึก</button>
         </div>
       </div>
     </div>
