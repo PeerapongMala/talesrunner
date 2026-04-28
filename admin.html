@@ -99,7 +99,11 @@
             "
           >
             <h2>สินค้าทั้งหมด</h2>
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select id="gameFilter" style="padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:#fff;font-size:13px;">
+                <option value="talesrunner">TalesRunner</option>
+                <option value="nte">NTE</option>
+              </select>
               <button class="btn-secondary" id="manageCategoriesBtn" style="width:auto;margin:0;padding:10px 18px;font-size:13px;">หมวดหมู่</button>
               <button
                 class="btn-primary"
@@ -409,63 +413,97 @@
     <div class="modal-overlay" id="addProductModal">
       <div class="modal">
         <h2>เพิ่มสินค้าใหม่</h2>
+
+        <!-- Game Type Selector -->
         <div class="form-group">
-          <label for="pName">ชื่อสินค้า</label>
-          <input type="text" id="pName" placeholder="ชื่อไอเทม" />
-          <p class="field-error" id="pNameError"></p>
-        </div>
-        <div class="form-group">
-          <label for="pAddedBy">ชื่อแอดมินที่เพิ่ม</label>
-          <select id="pAddedBy"></select>
-          <p class="field-error" id="pAddedByError"></p>
-        </div>
-        <div class="form-group">
-          <label for="pPrice">ราคา (บาท)</label>
-          <input type="number" id="pPrice" placeholder="0" min="0" step="any" />
-          <p class="field-error" id="pPriceError"></p>
-        </div>
-        <div class="form-group">
-          <label for="pStock">จำนวน Stock</label>
-          <input type="number" id="pStock" placeholder="0" min="0" />
-          <p class="field-error" id="pStockError"></p>
-        </div>
-        <div class="form-group">
-          <label for="pBundleQty">ขายเป็นชุด (ชิ้น/ชุด) <span style="color:#aaa;font-size:12px;">ว่าง = ขายทีละชิ้น</span></label>
-          <input type="number" id="pBundleQty" min="1" placeholder="1" />
-        </div>
-        <div class="form-group">
-          <label>หมวดหมู่</label>
-          <div id="addProductCategories" class="category-checkbox-list"></div>
-        </div>
-        <div class="form-group" id="externalCutGroup" style="display:none;">
-          <label>ส่วนแบ่งค่า com (คำนวณอัตโนมัติ)</label>
-          <p id="externalCutPreview" style="font-size:13px;margin-top:4px;color:#aaa;"></p>
-        </div>
-        <div class="form-group">
-          <label>รูปสินค้า</label>
-          <div class="image-upload-area" id="addImageUploadArea">
-            <img
-              id="addImagePreview"
-              alt="ตัวอย่างรูปสินค้า"
-              style="
-                display: none;
-                max-width: 120px;
-                max-height: 120px;
-                margin: 0 auto 10px;
-                border-radius: 8px;
-              "
-            />
-            <p id="addImageUploadText" style="color: #aaa; font-size: 14px">
-              คลิกเพื่อเลือกรูป
-            </p>
-            <input
-              type="file"
-              id="pImage"
-              accept="image/*"
-              style="display: none"
-            />
+          <label>ประเภท</label>
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="btn-game-type active" id="addTypeTR" data-game="talesrunner">TalesRunner (ไอเทม)</button>
+            <button type="button" class="btn-game-type" id="addTypeNTE" data-game="nte">NTE (ไอดีเกม)</button>
           </div>
-          <p class="field-error" id="pImageError"></p>
+        </div>
+
+        <!-- === TR Fields === -->
+        <div id="trFields">
+          <div class="form-group">
+            <label for="pName">ชื่อสินค้า</label>
+            <input type="text" id="pName" placeholder="ชื่อไอเทม" />
+            <p class="field-error" id="pNameError"></p>
+          </div>
+          <div class="form-group">
+            <label for="pAddedBy">ชื่อแอดมินที่เพิ่ม</label>
+            <select id="pAddedBy"></select>
+            <p class="field-error" id="pAddedByError"></p>
+          </div>
+          <div class="form-group">
+            <label for="pPrice">ราคา (บาท)</label>
+            <input type="number" id="pPrice" placeholder="0" min="0" step="any" />
+            <p class="field-error" id="pPriceError"></p>
+          </div>
+          <div class="form-group">
+            <label for="pStock">จำนวน Stock</label>
+            <input type="number" id="pStock" placeholder="0" min="0" />
+            <p class="field-error" id="pStockError"></p>
+          </div>
+          <div class="form-group">
+            <label for="pBundleQty">ขายเป็นชุด (ชิ้น/ชุด) <span style="color:#aaa;font-size:12px;">ว่าง = ขายทีละชิ้น</span></label>
+            <input type="number" id="pBundleQty" min="1" placeholder="1" />
+          </div>
+          <div class="form-group">
+            <label>หมวดหมู่</label>
+            <div id="addProductCategories" class="category-checkbox-list"></div>
+          </div>
+          <div class="form-group" id="externalCutGroup" style="display:none;">
+            <label>ส่วนแบ่งค่า com (คำนวณอัตโนมัติ)</label>
+            <p id="externalCutPreview" style="font-size:13px;margin-top:4px;color:#aaa;"></p>
+          </div>
+          <div class="form-group">
+            <label>รูปสินค้า</label>
+            <div class="image-upload-area" id="addImageUploadArea">
+              <img id="addImagePreview" alt="ตัวอย่างรูปสินค้า" style="display:none;max-width:120px;max-height:120px;margin:0 auto 10px;border-radius:8px;" />
+              <p id="addImageUploadText" style="color:#aaa;font-size:14px">คลิกเพื่อเลือกรูป</p>
+              <input type="file" id="pImage" accept="image/*" style="display:none" />
+            </div>
+            <p class="field-error" id="pImageError"></p>
+          </div>
+        </div>
+
+        <!-- === NTE Fields === -->
+        <div id="nteFields" style="display:none;">
+          <div class="form-group">
+            <label for="ntePrice">ราคา (บาท)</label>
+            <input type="number" id="ntePrice" placeholder="0" min="0" step="any" />
+            <p class="field-error" id="ntePriceError"></p>
+          </div>
+          <div class="form-group">
+            <label for="nteDiamonds">เพชรเหลือ</label>
+            <input type="number" id="nteDiamonds" placeholder="0" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="nteRateUp">ตู้เรท (กิจ) — กดไปกี่ครั้ง</label>
+            <input type="number" id="nteRateUp" placeholder="0" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="nteNormal">ตู้ธรรมดา — กดไปกี่ครั้ง</label>
+            <input type="number" id="nteNormal" placeholder="0" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="nteStory">เนื้อเรื่องถึงด่านไหน</label>
+            <input type="text" id="nteStory" placeholder="เช่น บทที่ 8" />
+          </div>
+          <div class="form-group">
+            <label for="nteNote">หมายเหตุ (ถ้ามี)</label>
+            <input type="text" id="nteNote" placeholder="รายละเอียดเพิ่มเติม" />
+          </div>
+          <div class="form-group">
+            <label>รูปภาพ <span style="color:#aaa;font-size:12px;">Ctrl+V วางได้เลย หรือคลิกเลือก (หลายรูป)</span></label>
+            <div class="image-upload-area nte-paste-area" id="ntePasteArea">
+              <div id="nteImagePreviews" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+              <p id="ntePasteText" style="color:#aaa;font-size:14px;">Ctrl+V วางรูป หรือคลิกเลือก</p>
+              <input type="file" id="nteImageFile" accept="image/*" multiple style="display:none" />
+            </div>
+            <p class="field-error" id="nteImageError"></p>
+          </div>
         </div>
 
         <div class="modal-buttons">

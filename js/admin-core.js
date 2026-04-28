@@ -409,6 +409,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('addProductBtn').addEventListener('click', addProduct);
   document.getElementById('openAddProductBtn').addEventListener('click', openAddProductModal);
   document.getElementById('cancelAddProduct').addEventListener('click', closeAddProductModal);
+  if (typeof setupGameFilter === 'function') setupGameFilter();
+  if (typeof setupGameTypeToggle === 'function') setupGameTypeToggle();
+  if (typeof setupNtePaste === 'function') setupNtePaste();
 
   document.getElementById('confirmAddStock').addEventListener('click', confirmAddStock);
   document.getElementById('cancelAddStock').addEventListener('click', closeAddStockModal);

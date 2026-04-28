@@ -1,3 +1,8 @@
+// ============ GAME FILTER ============
+let currentGameFilter = 'talesrunner';
+let addProductGameType = 'talesrunner';
+let nteImages = []; // base64 array for NTE listing
+
 // ============ PAGINATION ============
 let productPage = 1;
 const PRODUCTS_PER_PAGE = 20;
@@ -81,10 +86,12 @@ function processProductSnapshot(snapshot) {
       }
     }
 
+    // กรองตามเกมที่เลือก (items ที่ไม่มี game field ถือว่าเป็น talesrunner)
+    const gameFiltered = allProducts.filter(item => (item.game || 'talesrunner') === currentGameFilter);
+
     // แยกไอเทมที่เปิดอยู่ vs คลังเก็บ (ปิดอยู่)
-    // Owner เห็นทั้งหมด | Non-owner (admin/external) เห็นเฉพาะของตัวเอง
-    let activeProducts = allProducts.filter(item => item.active !== false);
-    let archivedProducts = allProducts.filter(item => item.active === false);
+    let activeProducts = gameFiltered.filter(item => item.active !== false);
+    let archivedProducts = gameFiltered.filter(item => item.active === false);
     if (!isOwner) {
       activeProducts = activeProducts.filter(item => isMyProduct(item));
       archivedProducts = archivedProducts.filter(item => isMyProduct(item));
@@ -1345,6 +1352,7 @@ function setupImageUploadArea(areaId, inputId, previewId, textId, onSelect) {
 
 // ============ ADD PRODUCT ============
 async function addProduct() {
+  if (addProductGameType === 'nte') { addNteAccount(); return; }
   clearFieldErrors();
   const name = document.getElementById('pName').value.trim();
   const price = parseFloat(document.getElementById('pPrice').value);
@@ -1374,6 +1382,8 @@ async function addProduct() {
     const bundleQty = parseInt(document.getElementById('pBundleQty').value) || 0;
     const selectedCats = getSelectedCategories('addProductCategories');
     const newItem = {
+      game: 'talesrunner',
+      type: 'item',
       name,
       price,
       stock,
@@ -1428,6 +1438,27 @@ async function addProduct() {
 function openAddProductModal() {
   clearFieldErrors();
   addImageBase64 = null;
+  nteImages = [];
+  renderNteImagePreviews();
+
+  // ตั้ง game type ตาม filter ปัจจุบัน
+  addProductGameType = currentGameFilter;
+  const btnTR = document.getElementById('addTypeTR');
+  const btnNTE = document.getElementById('addTypeNTE');
+  if (btnTR) btnTR.classList.toggle('active', addProductGameType === 'talesrunner');
+  if (btnNTE) btnNTE.classList.toggle('active', addProductGameType === 'nte');
+  document.getElementById('trFields').style.display = addProductGameType === 'talesrunner' ? '' : 'none';
+  document.getElementById('nteFields').style.display = addProductGameType === 'nte' ? '' : 'none';
+  document.getElementById('addProductBtn').textContent = addProductGameType === 'nte' ? 'สร้าง Listing' : 'เพิ่มสินค้า';
+
+  // Reset NTE fields
+  if (document.getElementById('ntePrice')) document.getElementById('ntePrice').value = '';
+  if (document.getElementById('nteDiamonds')) document.getElementById('nteDiamonds').value = '';
+  if (document.getElementById('nteRateUp')) document.getElementById('nteRateUp').value = '';
+  if (document.getElementById('nteNormal')) document.getElementById('nteNormal').value = '';
+  if (document.getElementById('nteStory')) document.getElementById('nteStory').value = '';
+  if (document.getElementById('nteNote')) document.getElementById('nteNote').value = '';
+
   document.getElementById('pName').value = '';
   document.getElementById('pPrice').value = '';
   document.getElementById('pStock').value = '';
@@ -2361,6 +2392,144 @@ async function rejectPendingAction(actionId) {
     showToast('ปฏิเสธคำขอแล้ว');
   } catch (e) {
     showAlert('ปฏิเสธไม่ได้: ' + e.message, 'ผิดพลาด');
+  }
+}
+
+// ============ GAME FILTER + NTE SUPPORT ============
+
+function setupGameFilter() {
+  const sel = document.getElementById('gameFilter');
+  if (!sel) return;
+  sel.value = currentGameFilter;
+  sel.addEventListener('change', () => {
+    currentGameFilter = sel.value;
+    productPage = 1;
+    if (_lastProductSnapshot) processProductSnapshot(_lastProductSnapshot);
+  });
+}
+
+function setupGameTypeToggle() {
+  const btnTR = document.getElementById('addTypeTR');
+  const btnNTE = document.getElementById('addTypeNTE');
+  if (!btnTR || !btnNTE) return;
+
+  function setGameType(game) {
+    addProductGameType = game;
+    btnTR.classList.toggle('active', game === 'talesrunner');
+    btnNTE.classList.toggle('active', game === 'nte');
+    document.getElementById('trFields').style.display = game === 'talesrunner' ? '' : 'none';
+    document.getElementById('nteFields').style.display = game === 'nte' ? '' : 'none';
+    document.getElementById('addProductBtn').textContent = game === 'nte' ? 'สร้าง Listing' : 'เพิ่มสินค้า';
+  }
+
+  btnTR.addEventListener('click', () => setGameType('talesrunner'));
+  btnNTE.addEventListener('click', () => setGameType('nte'));
+}
+
+function setupNtePaste() {
+  const area = document.getElementById('ntePasteArea');
+  const fileInput = document.getElementById('nteImageFile');
+  if (!area) return;
+
+  area.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', (e) => {
+    for (const file of e.target.files) {
+      readImageFile(file);
+    }
+    fileInput.value = '';
+  });
+
+  document.addEventListener('paste', (e) => {
+    if (!document.getElementById('addProductModal').classList.contains('active')) return;
+    if (addProductGameType !== 'nte') return;
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        readImageFile(item.getAsFile());
+      }
+    }
+  });
+
+  function readImageFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target.result;
+      nteImages.push(base64);
+      renderNteImagePreviews();
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function renderNteImagePreviews() {
+  const container = document.getElementById('nteImagePreviews');
+  const text = document.getElementById('ntePasteText');
+  if (!container) return;
+  container.innerHTML = nteImages.map((img, i) =>
+    `<div style="position:relative;display:inline-block;">
+      <img src="${img}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.2);">
+      <button type="button" data-nte-remove="${i}" style="position:absolute;top:-4px;right:-4px;background:#ff4444;color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;">✕</button>
+    </div>`
+  ).join('');
+  if (text) text.style.display = nteImages.length > 0 ? 'none' : '';
+
+  container.querySelectorAll('[data-nte-remove]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.nteRemove, 10);
+      nteImages.splice(idx, 1);
+      renderNteImagePreviews();
+    });
+  });
+}
+
+async function addNteAccount() {
+  clearFieldErrors();
+  const price = parseFloat(document.getElementById('ntePrice').value);
+  const diamonds = parseInt(document.getElementById('nteDiamonds').value, 10) || 0;
+  const rateUpPulls = parseInt(document.getElementById('nteRateUp').value, 10) || 0;
+  const normalPulls = parseInt(document.getElementById('nteNormal').value, 10) || 0;
+  const storyChapter = document.getElementById('nteStory').value.trim();
+  const note = document.getElementById('nteNote').value.trim();
+
+  let hasError = false;
+  if (isNaN(price) || price <= 0) { showFieldError('ntePriceError', 'กรุณากรอกราคา'); hasError = true; }
+  if (nteImages.length === 0) { showFieldError('nteImageError', 'กรุณาวางรูปอย่างน้อย 1 รูป'); hasError = true; }
+  if (hasError) return;
+
+  const btn = document.getElementById('addProductBtn');
+  btn.disabled = true;
+  btn.textContent = 'กำลังสร้าง...';
+
+  try {
+    const listing = {
+      game: 'nte',
+      type: 'account',
+      price,
+      diamonds,
+      rateUpPulls,
+      normalPulls,
+      storyChapter,
+      note,
+      images: nteImages,
+      accountStatus: 'available',
+      active: true,
+      createdBy: currentAdminName || 'admin',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('items').doc().set(listing);
+    closeAddProductModal();
+    showToast('สร้าง listing ไอดี NTE แล้ว');
+  } catch (e) {
+    showAlert('สร้างไม่ได้: ' + e.message, 'ผิดพลาด');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'สร้าง Listing';
   }
 }
 
